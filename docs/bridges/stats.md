@@ -30,29 +30,13 @@
 }
 ```
 
-## `GET /api/stats/today?date=YYYY-MM-DD` → `TodayDTO`
-
-| Field | Kiểu JSON | Ghi chú |
-|-------|-----------|---------|
-| `date` | string | |
-| `weekday` | 1–7 | ISO, 1 = Thứ 2 |
-| `routines` | `TodayRoutineDTO[]` | Giáo án **chưa lưu trữ**: có lịch hôm nay trước, giữ `sortOrder` trong từng nhóm |
-| `sessions` | `SessionDTO[]` | Buổi đã ghi trong ngày (xem `sessions.md`) |
-
-`TodayRoutineDTO = { id, name, itemCount, estimatedSec, scheduleMask, scheduled: boolean, doneCount: number, previews: ExercisePreviewDTO[] }` — `doneCount` = số buổi của giáo án này trong ngày; `previews` giống `RoutineSummaryDTO.previews` (xem bridge routines).
-
-```json
-{ "date": "2026-10-23", "weekday": 5,
-  "routines": [ { "id": 1, "name": "Kegel hằng ngày", "itemCount": 3, "estimatedSec": 571, "scheduleMask": 127, "scheduled": true, "doneCount": 1,
-    "previews": [{ "name": "Thở bụng thả lỏng sàn chậu", "category": "breathing", "isCombo": false, "cover": null }] } ],
-  "sessions": [ "…SessionDTO" ] }
-```
+> Lịch hôm nay (trước đây `GET /api/stats/today`) đã chuyển sang `GET /api/plan/today?date=` — lấy buổi từ các chương trình đang theo, xem `programs.md`.
 
 ## Lỗi
 
 | Status | Khi nào |
 |--------|---------|
-| 400 | Thiếu / sai định dạng `today` hoặc `date` (JSON array issue của zod) |
+| 400 | Thiếu / sai định dạng `today` (JSON array issue của zod) |
 | 401 | Chưa login |
 
 ## Endpoint reference nhanh (toàn app)
@@ -60,10 +44,15 @@
 ```
 POST   /api/auth/login | /api/auth/logout        GET /api/health (public)
 GET    /api/exercises            POST /api/exercises        GET|PATCH|DELETE /api/exercises/:id
-POST   /api/presets/seed
+POST   /api/presets/seed { today }
 GET    /api/routines             POST /api/routines         GET|PATCH|DELETE /api/routines/:id
 POST   /api/routines/:id/items   PATCH|DELETE /api/routines/:id/items/:itemId
 POST   /api/routines/:id/items/reorder
 GET    /api/sessions             POST /api/sessions         GET|PATCH|DELETE /api/sessions/:id
-GET    /api/stats/overview?today=    GET /api/stats/today?date=
+GET    /api/programs             POST /api/programs         GET|PATCH|DELETE /api/programs/:id
+POST   /api/programs/:id/phases  PATCH|DELETE /api/programs/:id/phases/:phaseId
+POST   /api/programs/:id/phases/reorder
+POST   /api/programs/:id/phases/:phaseId/slots   DELETE /api/programs/:id/phases/:phaseId/slots/:slotId
+GET    /api/plan/today?date=     POST /api/plan/changes     DELETE /api/plan/changes/:id
+GET    /api/stats/overview?today=
 ```

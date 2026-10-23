@@ -1,33 +1,56 @@
 <script setup lang="ts">
 	import { addDays, isoWeekday, localDateIso, startOfIsoWeek } from '#shared/utils/date';
-	import { WEEKDAY_SHORT_LABELS, describeMask } from '#shared/utils/weekday';
+	import type { PlanChangeInput } from '#shared/types/plan';
+	import { WEEKDAY_SHORT_LABELS } from '#shared/utils/weekday';
 	import { CATEGORY_ICONS, CATEGORY_LABELS, CATEGORY_TONES } from '~/utils/labels';
-	import { formatDate, formatDuration, weekdayLabel } from '~/utils/format';
+	import { formatDate, weekdayLabel } from '~/utils/format';
 
 	const pageTitle = usePageTitle();
 	pageTitle.value = 'Hôm nay';
 	useHead({ title: 'Hôm nay — Mia Health' });
 
 	const toast = useToast();
-	const { overview, today, error, loadOverview, loadToday } = useStats();
+	const { overview, error, loadOverview } = useStats();
+	const { plan, error: planError, load: loadPlan, change, undo } = usePlan();
 	const { seedPresets, error: seedError } = useExercises();
 
 	const todayIso = localDateIso();
 	const loaded = ref(false);
 
 	async function load() {
-		await Promise.all([loadOverview(todayIso), loadToday(todayIso)]);
-		if (error.value) toast.add({ title: 'Lỗi tải dữ liệu', description: error.value, color: 'error' });
+		await Promise.all([loadOverview(todayIso), loadPlan(todayIso)]);
+		const message = error.value ?? planError.value;
+		if (message) toast.add({ title: 'Lỗi tải dữ liệu', description: message, color: 'error' });
 		loaded.value = true;
 	}
 	onMounted(load);
 
-	const scheduled = computed(() => today.value?.routines.filter((r) => r.scheduled && r.itemCount > 0) ?? []);
-	const others = computed(() => today.value?.routines.filter((r) => !r.scheduled && r.itemCount > 0) ?? []);
-	const hasRoutines = computed(() => (today.value?.routines.length ?? 0) > 0);
-	const doneToday = computed(() => today.value?.sessions.length ?? 0);
-	const scheduledDone = computed(() => scheduled.value.filter((r) => r.doneCount > 0).length);
-	const allScheduledDone = computed(() => scheduled.value.length > 0 && scheduledDone.value === scheduled.value.length);
+	// Chưa có chương trình nào (kể cả chưa theo) ⇒ người dùng mới: mời thêm bộ mẫu.
+	const isEmpty = computed(() => plan.value !== null && plan.value.programs.length === 0 && plan.value.idlePrograms.length === 0);
+	const doneToday = computed(() => plan.value?.sessions.length ?? 0);
+
+	// Bỏ qua / đổi / thêm buổi — chỉ áp cho hôm nay; server trả lịch ngày mới nhất.
+	const planBusy = ref(false);
+	const CHANGE_TOASTS: Record<PlanChangeInput['kind'], string> = {
+		skip: 'Đã bỏ qua buổi này hôm nay',
+		swap: 'Đã đổi buổi cho hôm nay',
+		add: 'Đã thêm buổi cho hôm nay',
+	};
+
+	async function onChange(input: PlanChangeInput) {
+		planBusy.value = true;
+		const res = await change(input);
+		planBusy.value = false;
+		if (!res) toast.add({ title: 'Không đổi được lịch', description: planError.value ?? undefined, color: 'error' });
+		else toast.add({ title: CHANGE_TOASTS[input.kind], color: 'success' });
+	}
+
+	async function onUndo(changeId: number) {
+		planBusy.value = true;
+		const res = await undo(changeId);
+		planBusy.value = false;
+		if (!res) toast.add({ title: 'Không hoàn tác được', description: planError.value ?? undefined, color: 'error' });
+	}
 
 	const streakText = computed(() => {
 		const o = overview.value;
@@ -67,7 +90,7 @@
 		}
 		toast.add({
 			title: 'Đã thêm bộ mẫu',
-			description: `${res.exercisesCreated} bài tập, ${res.routinesCreated} giáo án`,
+			description: `${res.programsCreated} chương trình, ${res.routinesCreated} giáo án, ${res.exercisesCreated} bài tập`,
 			color: 'success',
 		});
 		await load();
@@ -123,84 +146,23 @@
 		</UCard>
 
 		<!-- Onboarding -->
-		<UCard v-if="loaded && !hasRoutines">
+		<UCard v-if="loaded && isEmpty">
 			<div class="flex flex-col items-center gap-3 py-2 text-center">
 				<span class="flex size-14 items-center justify-center rounded-2xl bg-(--ui-primary)/15">
 					<UIcon name="i-heroicons-sparkles" class="size-8 text-(--ui-primary)" />
 				</span>
 				<p class="font-semibold text-(--ui-text-highlighted)">Chào mừng đến Mia Health</p>
 				<p class="text-sm text-(--ui-text-muted)">
-					Thêm bộ mẫu gồm 62 bài (Kegel, tạ ấm, tạ tay, máy chạy bộ, core, giãn cơ) và 10 giáo án có lịch sẵn — trong đó có lịch tập sáng T2 → CN 30–40 phút. Sửa lại theo ý bạn sau.
+					Thêm bộ mẫu: chương trình "Giảm mỡ tại nhà" 8 tuần (tạ ấm, tạ tay, máy chạy bộ, 30–40 phút mỗi sáng), "Sàn chậu &amp; sinh lý nam" và hơn 60 bài tập — sửa lại theo ý bạn sau.
 				</p>
 				<UButton :loading="seeding" icon="i-heroicons-sparkles" @click="seed">Thêm bộ mẫu</UButton>
-				<UButton variant="ghost" color="neutral" size="sm" to="/routines">Hoặc tự tạo giáo án</UButton>
+				<UButton variant="ghost" color="neutral" size="sm" to="/programs">Hoặc tự tạo chương trình</UButton>
 			</div>
 		</UCard>
 
-		<!-- Lịch hôm nay -->
-		<UCard v-if="loaded && hasRoutines">
-			<div class="mb-3 flex items-center gap-2 border-b border-(--ui-border) pb-3">
-				<UIcon name="i-heroicons-calendar-days" class="size-4 shrink-0 text-(--ui-primary)" />
-				<h3 class="flex-1 text-sm font-semibold text-(--ui-text-highlighted)">Lịch hôm nay</h3>
-				<span v-if="scheduled.length > 0" class="text-xs text-(--ui-text-muted)">
-					Xong {{ scheduledDone }}/{{ scheduled.length }}
-				</span>
-			</div>
-
-			<p v-if="allScheduledDone" class="mb-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-				<UIcon name="i-heroicons-check-badge" class="size-5 shrink-0" />
-				Đã xong mọi giáo án hôm nay. Tuyệt vời!
-			</p>
-
-			<div v-if="scheduled.length > 0" class="space-y-2">
-				<div
-					v-for="r in scheduled"
-					:key="r.id"
-					class="flex items-center gap-3 rounded-2xl border border-(--ui-border) p-2"
-				>
-					<NuxtLink :to="`/routines/${r.id}`" class="relative shrink-0">
-						<PreviewMosaic :previews="r.previews" class="size-14" :class="r.doneCount > 0 ? 'opacity-60' : ''" />
-						<span
-							v-if="r.doneCount > 0"
-							class="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-emerald-500 text-white ring-2 ring-(--ui-bg)"
-							aria-label="Đã tập"
-						>
-							<UIcon name="i-heroicons-check" class="size-3.5" />
-						</span>
-					</NuxtLink>
-					<NuxtLink :to="`/routines/${r.id}`" class="min-w-0 flex-1">
-						<p class="truncate text-sm font-medium text-(--ui-text-highlighted)">{{ r.name }}</p>
-						<p class="text-xs text-(--ui-text-muted)">
-							{{ r.itemCount }} bài · ~{{ formatDuration(r.estimatedSec) }}
-							<template v-if="r.doneCount > 1"> · đã tập {{ r.doneCount }} lần</template>
-							<template v-else-if="r.doneCount === 1"> · đã tập</template>
-						</p>
-					</NuxtLink>
-					<UButton
-						:icon="r.doneCount > 0 ? 'i-heroicons-arrow-path' : 'i-heroicons-play'"
-						:variant="r.doneCount > 0 ? 'soft' : 'solid'"
-						:to="`/play?routine=${r.id}`"
-					>
-						{{ r.doneCount > 0 ? 'Lại' : 'Tập' }}
-					</UButton>
-				</div>
-			</div>
-			<p v-else class="text-sm text-(--ui-text-muted)">Hôm nay không có lịch — nghỉ ngơi, hoặc tập thêm một giáo án bên dưới.</p>
-
-			<details v-if="others.length > 0" class="mt-3 border-t border-(--ui-border) pt-2" :open="scheduled.length === 0">
-				<summary class="cursor-pointer text-xs text-(--ui-text-muted)">Giáo án khác ({{ others.length }})</summary>
-				<div class="mt-2 space-y-2">
-					<div v-for="r in others" :key="r.id" class="flex items-center gap-3">
-						<PreviewMosaic :previews="r.previews" class="size-10" />
-						<NuxtLink :to="`/routines/${r.id}`" class="min-w-0 flex-1">
-							<p class="truncate text-sm text-(--ui-text-highlighted)">{{ r.name }}</p>
-							<p class="text-[11px] text-(--ui-text-dimmed)">{{ describeMask(r.scheduleMask) }} · ~{{ formatDuration(r.estimatedSec) }}</p>
-						</NuxtLink>
-						<UButton icon="i-heroicons-play" variant="soft" size="sm" :to="`/play?routine=${r.id}`" :aria-label="`Tập ${r.name}`" />
-					</div>
-				</div>
-			</details>
-		</UCard>
+		<!-- Lịch hôm nay — từ các chương trình đang theo -->
+		<div v-else-if="!loaded" class="h-48 rounded-xl bg-(--ui-bg-elevated) animate-pulse" />
+		<TodayPlanCard v-else-if="plan" :plan="plan" :busy="planBusy" @change="onChange" @undo="onUndo" />
 
 		<!-- Tuần này -->
 		<UCard v-if="overview">

@@ -112,7 +112,7 @@ Bài tập ghép từ ≥ 2 bài đơn trong thư viện, có thứ tự, trùng
 | GET | `/api/exercises/:id` | | `ExerciseDTO` |
 | PATCH | `/api/exercises/:id` | mọi field của POST + `isArchived`, ít nhất 1 field. `components` có mặt ⇒ **thay toàn bộ** danh sách bài con (thứ tự = thứ tự mảng); không gửi ⇒ giữ nguyên. Không đổi được `mode` giữa bài đơn ↔ `combo` | `ExerciseDTO` |
 | DELETE | `/api/exercises/:id` | | `ExerciseDTO` (bản trước khi xoá). Bài kết hợp: bài con xoá theo |
-| POST | `/api/presets/seed` | — | `{ exercisesCreated: number, routinesCreated: number }` |
+| POST | `/api/presets/seed` | `{ today: 'YYYY-MM-DD' }` (bắt buộc, `localDateIso()`) — ngày bắt đầu của chương trình mẫu "đang theo" | `{ exercisesCreated: number, routinesCreated: number, programsCreated: number }` |
 
 ## Lỗi
 
@@ -145,4 +145,4 @@ Bài tập ghép từ ≥ 2 bài đơn trong thư viện, có thứ tự, trùng
 - Sửa thông số bài ở thư viện **không** đổi các giáo án đã có (item copy thông số lúc thêm), cũng **không** đổi bài con của các bài kết hợp (bài con cũng copy).
 - Ngược lại, sửa **danh sách bài con** của bài kết hợp thì mọi giáo án dùng nó đổi theo — item giáo án chỉ copy số vòng / nghỉ giữa vòng.
 - Chạy bài kết hợp: `toPlanItems({ ...e, exerciseId: e.id, exercise: e }, 0)` rồi `buildTimeline` như bài thường. Lịch sử ghi từng bài con.
-- `POST /api/presets/seed` idempotent theo tên: gọi lại chỉ thêm phần còn thiếu, không ghi đè thông số đã chỉnh. DB trống ⇒ `{ "exercisesCreated": 62, "routinesCreated": 10 }`; gọi lại ⇒ `{ "exercisesCreated": 0, "routinesCreated": 0 }`. Giáo án: "Kegel hằng ngày", "Core & thể dục dụng cụ cơ bản", "Giãn cơ buổi tối" + 7 giáo án sáng "T2 · …" → "CN · …" (mỗi giáo án lịch đúng một ngày). Ghi theo 3 batch (bài đơn → bài kết hợp → giáo án) ⇒ ~28 câu lệnh D1 cho cả bộ, dưới trần 50 query/request của gói Workers Free. Bài mẫu đang bị lưu trữ mà bộ mẫu cần làm bài con / item ⇒ 400 `Bài tập "…" đã lưu trữ — khôi phục trước khi thêm`, lô đó không ghi gì.
+- `POST /api/presets/seed` idempotent theo tên: gọi lại chỉ thêm phần còn thiếu, không ghi đè thông số đã chỉnh. DB trống ⇒ `{ "exercisesCreated": 62, "routinesCreated": 11, "programsCreated": 4 }`; DB đã có bộ mẫu cũ (trước khi có chương trình) ⇒ `{ "exercisesCreated": 0, "routinesCreated": 1, "programsCreated": 4 }`; gọi lại ⇒ toàn 0. Chương trình mẫu: "Giảm mỡ tại nhà" (2 giai đoạn × 4 tuần) và "Sàn chậu & sinh lý nam" (26 tuần, lặp) **đang theo** từ `today`; "Core cơ bản không dụng cụ", "Thư giãn buổi tối" chưa theo. Ghi theo 4 batch (bài đơn → bài kết hợp → giáo án → chương trình), dưới trần 50 query/request của gói Workers Free. Bài / giáo án mẫu đang bị lưu trữ mà bộ mẫu cần dùng ⇒ 400 `… đã lưu trữ — khôi phục trước khi thêm`, lô đó không ghi gì.

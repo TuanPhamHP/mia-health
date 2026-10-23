@@ -8,6 +8,7 @@ import type {
 	UpdateMediaInput,
 } from '#shared/types/exercises';
 import type { SeedResultDTO } from '#shared/types/presets';
+import { localDateIso } from '#shared/utils/date';
 import { createRunner } from '~/utils/api';
 
 export function useExercises() {
@@ -89,9 +90,12 @@ export function useExercises() {
 		);
 	}
 
-	/** Thêm bộ bài tập + giáo án mẫu (idempotent theo tên). */
+	/**
+	 * Thêm bộ bài tập + giáo án + chương trình mẫu (idempotent theo tên). Chương trình mẫu
+	 * "đang theo" bắt đầu từ hôm nay — ngày lấy ở client, server không biết múi giờ.
+	 */
 	function seedPresets(): Promise<SeedResultDTO | null> {
-		return run(() => $fetch<SeedResultDTO>('/api/presets/seed', { method: 'POST' }));
+		return run(() => $fetch<SeedResultDTO>('/api/presets/seed', { method: 'POST', body: { today: localDateIso() } }));
 	}
 
 	return {

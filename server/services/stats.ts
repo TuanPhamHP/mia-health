@@ -1,11 +1,7 @@
 import * as repo from '../repositories/stats';
-import * as routinesSvc from './routines';
-import * as sessionsSvc from './sessions';
-import { addDays, isoWeekday, startOfIsoWeek } from '../../shared/utils/date';
+import { addDays, startOfIsoWeek } from '../../shared/utils/date';
 import { computeStreaks, fillDays, rollupWeeks } from '../../shared/utils/streak';
-import { isScheduledOn } from '../../shared/utils/weekday';
-import type { StatsOverviewDTO, TodayRoutineDTO } from '../../shared/types/stats';
-import type { TodayComputed } from '../types/stats';
+import type { StatsOverviewDTO } from '../../shared/types/stats';
 
 const WEEKLY_WEEKS = 8;
 const HEATMAP_WEEKS = 12;
@@ -34,33 +30,5 @@ export async function getOverview(today: string): Promise<StatsOverviewDTO> {
 		weekly,
 		heatmap: fillDays(daily, heatmapFrom, today),
 		byCategory,
-	};
-}
-
-export async function getToday(date: string): Promise<TodayComputed> {
-	const [routines, counts, sessions] = await Promise.all([
-		routinesSvc.listRoutines({}),
-		repo.countByRoutineOnDate(date),
-		sessionsSvc.listSessions({ from: date, to: date }),
-	]);
-
-	const rows: TodayRoutineDTO[] = routines.map((r) => ({
-		id: r.id,
-		name: r.name,
-		itemCount: r.itemCount,
-		estimatedSec: r.estimatedSec,
-		scheduleMask: r.scheduleMask,
-		scheduled: isScheduledOn(r.scheduleMask, date),
-		doneCount: counts.get(r.id) ?? 0,
-		previews: r.previews,
-	}));
-	// sort ổn định: giữ sortOrder của người dùng trong từng nhóm.
-	rows.sort((a, b) => Number(b.scheduled) - Number(a.scheduled));
-
-	return {
-		date,
-		weekday: isoWeekday(date),
-		routines: rows,
-		sessions,
 	};
 }

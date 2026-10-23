@@ -18,7 +18,9 @@ Domain model:
 - `exercises` — thư viện bài tập (category, `mode` = cách thực hiện, thông số mặc định).
 - `exercise_components` — bài con của **bài kết hợp** (`exercises.mode = 'combo'`, chạy theo `comboStyle`: luân phiên theo vòng / lần lượt).
 - `exercise_media` — ảnh / video hướng dẫn của bài: ảnh tải lên **R2** hoặc link https, video YouTube (link).
-- `routines` + `routine_items` — giáo án: danh sách bài có thứ tự + lịch theo thứ trong tuần (`scheduleMask`).
+- `routines` + `routine_items` — giáo án = **một buổi tập**: danh sách bài có thứ tự. KHÔNG mang lịch.
+- `programs` + `program_phases` + `program_slots` — chương trình theo **mục tiêu** (`goal`): các giai đoạn nối tiếp, mỗi giai đoạn một lịch tuần (thứ → giáo án). Lịch tập CHỈ nằm ở đây; nhiều chương trình được theo cùng lúc.
+- `plan_changes` — thay đổi lịch chỉ cho MỘT ngày (bỏ qua / đổi buổi / thêm buổi). Module `plan` dựng lịch ngày từ chương trình đang theo + thay đổi.
 - `workout_sessions` + `session_entries` — buổi tập đã thực hiện (snapshot tên/nhóm bài).
 - `stats` — streak, tuần, heatmap, theo nhóm (không có bảng riêng, aggregate từ sessions).
 
@@ -60,7 +62,7 @@ server/
 shared/
   schemas/                  # zod — dùng chung server + client
   types/                    # DTO
-  utils/                    # pure function: date, weekday, streak, timeline (có vitest)
+  utils/                    # pure function: date, weekday, streak, timeline, program (có vitest)
 app/                        # UI (pages, components, composables)
 ```
 
@@ -68,7 +70,7 @@ app/                        # UI (pages, components, composables)
 
 - Chỉ **repository** gọi `useDB()` / `useMediaBucket()`. Ngoại lệ duy nhất: `server/api/health.get.ts` (probe hạ tầng).
 - Route handler không chứa business logic.
-- Module không có bảng riêng (`presets`) được phép không có repository — nhưng mọi lần ghi vẫn đi qua service/repository của module sở hữu bảng.
+- Module không có bảng riêng (`presets`) được phép không có repository — nhưng mọi lần ghi vẫn đi qua service/repository của module sở hữu bảng. `plan` chỉ ghi bảng của mình (`plan_changes`), đọc chương trình / giáo án qua service của module sở hữu.
 
 ## 4. Database workflow
 
@@ -107,7 +109,7 @@ yarn dev                 # dev (emulate D1 binding)
 yarn build               # build cho Cloudflare Pages → ./dist
 yarn preview             # chạy bản build trên workerd (wrangler pages dev) với D1 local
 yarn typecheck           # vue-tsc — PHẢI XANH trước khi push (build KHÔNG check type)
-yarn test                # vitest cho shared/utils — streak, weekday, timeline
+yarn test                # vitest — shared/utils (streak, weekday, timeline, program) + tính nhất quán bộ mẫu
 yarn db:generate         # sinh migration từ schema
 yarn db:migrate:local    # apply migration vào D1 local
 yarn db:migrate:remote   # apply migration vào D1 production
@@ -139,7 +141,7 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 
 ## 10. Quyết định đã chốt (ADR)
 
-- **Ngày là TEXT `YYYY-MM-DD` theo giờ ĐỊA PHƯƠNG của người tập, do CLIENT gửi.** Server Cloudflare chạy UTC: tập 6h sáng ở VN (UTC+7) mà để server tự lấy ngày thì bị ghi thành hôm trước, streak gãy. Vì thế `GET /api/stats/overview?today=` và `GET /api/stats/today?date=` **bắt buộc** tham số ngày; client lấy bằng `localDateIso()` (`shared/utils/date.ts`). KHÔNG thêm chỗ nào gọi `new Date()` ở server để suy ra "hôm nay".
+- **Ngày là TEXT `YYYY-MM-DD` theo giờ ĐỊA PHƯƠNG của người tập, do CLIENT gửi.** Server Cloudflare chạy UTC: tập 6h sáng ở VN (UTC+7) mà để server tự lấy ngày thì bị ghi thành hôm trước, streak gãy. Vì thế `GET /api/stats/overview?today=`, `GET /api/plan/today?date=`, `POST /api/plan/changes { date }` và `POST /api/presets/seed { today }` **bắt buộc** tham số ngày (ngày bắt đầu chương trình `startDate` cũng do client gửi); client lấy bằng `localDateIso()` (`shared/utils/date.ts`). KHÔNG thêm chỗ nào gọi `new Date()` ở server để suy ra "hôm nay".
 - **Timestamp hệ thống** (`created_at`, `updated_at`, `started_at`): integer unix, Drizzle `mode: 'timestamp'`.
 - **Thời lượng: integer giây.** `durationSec` của session = thời gian tập THẬT (không tính lúc tạm dừng).
 - **Thông số bài tập luôn NOT NULL, `mode` quyết định cột nào có nghĩa**: `reps` dùng sets/reps/restSec; `hold` dùng sets/reps/holdSec/relaxSec/restSec; `duration` dùng sets/durationSec/restSec. Để nullable thì đổi mode sẽ rơi vào trạng thái thiếu số.
@@ -149,10 +151,13 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Xoá bài tập đang nằm trong giáo án ⇒ 409**, không tự gỡ khỏi giáo án (gợi ý lưu trữ `isArchived`). FK `routine_items.exercise_id` là RESTRICT làm lưới an toàn cuối.
 - **Streak không đứt vì hôm nay chưa tập**: hôm qua có tập thì chuỗi còn sống tới hết hôm nay. Đứt từ sáng sẽ báo "0 ngày" đúng lúc người dùng mở app để tập.
 - **Tuần = ISO (Thứ 2 → CN), gộp ở TS** (`rollupWeeks`), KHÔNG dùng `strftime('%W')` — `%W` đánh số lại từ 00 mỗi đầu năm, tuần vắt qua 1/1 bị chẻ đôi.
-- **`scheduleMask`**: bit (isoDay − 1), bit 0 = Thứ 2 … bit 6 = CN; 127 = mỗi ngày, 0 = không lịch.
+- **Lịch tập nằm ở chương trình, không ở giáo án** (thay cho `routines.schedule_mask` cũ, đã drop ở migration 0003). Lịch gắn vào từng giáo án làm màn Hôm nay hiện một chồng buổi không rõ vì sao, muốn đổi phải sửa từng giáo án. Giờ: chương trình = mục tiêu + "vì sao" + giai đoạn, giáo án là khối dùng lại. Ô lịch (`program_slots`) **tham chiếu** giáo án (không copy như item giáo án): sửa giáo án là sửa buổi ở mọi chương trình dùng nó. `weekday` lưu ISO 1–7.
+- **Chương trình có thời hạn + giai đoạn.** `startDate` null = không theo. Tuần 1 = tuần ISO chứa `startDate` (bắt đầu giữa tuần thì tuần 1 ngắn). Hết giai đoạn cuối: `repeat` ⇒ quay lại giai đoạn 1, không ⇒ hoàn thành. Tính toán ở `programStatus()` (`shared/utils/program.ts`, có vitest) — server dựng lịch ngày, client hiện trạng thái, KHÔNG trả status từ API chương trình (phụ thuộc "hôm nay" của client). Chương trình luôn ≥ 1 giai đoạn (tạo mới có sẵn "Giai đoạn 1", chặn xoá giai đoạn cuối).
+- **Thay đổi lịch chỉ cho một ngày** (`plan_changes`): mỗi buổi theo lịch giữ tối đa MỘT thay đổi skip/swap mỗi ngày (ghi mới = thay cái cũ, cùng batch), `add` không trùng giáo án. Thay đổi trỏ tới buổi không còn trong lịch (chương trình sửa sau) bị bỏ qua lặng lẽ. Đổi lâu dài = sửa chương trình. `applyDayChanges()` là pure function có vitest.
+- **Xoá giáo án đang nằm trong lịch chương trình ⇒ 409** (cùng lý do với bài trong giáo án), FK `program_slots.routine_id` RESTRICT là lưới cuối. Giáo án bị lưu trữ sau khi đã vào lịch vẫn giữ trong lịch; chỉ chặn thêm **mới**.
 - **Player đo thời gian bằng `performance.now()`**, không tin nhịp `setInterval` (bị bóp khi tab ẩn/máy khoá). Bắt kịp nhiều bước một lúc thì chỉ phát tín hiệu cho bước đang đứng.
 - **Hết giáo án ⇒ tự lưu buổi tập** (không chờ người dùng bấm, tránh mất buổi khi đóng app); cảm giác/ghi chú PATCH sau. Dừng sớm ⇒ hỏi lưu phần đã tập (`completed = false`, chỉ entry có `setsDone > 0`) hay bỏ.
-- **Seed mẫu idempotent THEO TÊN** (`POST /api/presets/seed`): trùng tên thì bỏ qua, không ghi đè thông số người dùng đã chỉnh.
+- **Seed mẫu idempotent THEO TÊN** (`POST /api/presets/seed`): trùng tên thì bỏ qua, không ghi đè thông số người dùng đã chỉnh. Ghi theo lô (`addExercises` / `addRoutines` / `addPrograms`, mỗi lô một `db.batch`) vì trần 50 query/request (xem §5) — cả bộ ~37 câu lệnh. Chương trình mẫu `follow: true` bắt đầu theo từ `today` client gửi.
 - **Bài kết hợp là một bài tập `mode = 'combo'`**, không phải bảng/khái niệm riêng — nhờ vậy nằm trong thư viện, thêm vào giáo án như bài thường (FK `routine_items` giữ nguyên), tập lẻ được. Danh sách bài con ở `exercise_components`. Hai kiểu (`comboStyle`): `circuit` luân phiên — mỗi vòng 1 set từng bài con, `sets` = số vòng, `restSec` = nghỉ giữa vòng, `restSec` của bài con = nghỉ trước bài kế; `sequence` lần lượt — y như các bài rời liền nhau.
 - **Bài kết hợp chỉ một tầng**: bài con luôn là bài đơn (service chặn lồng, 400). Timeline trải bài kết hợp đúng một lần bằng `toPlanItems()` — không đệ quy. Cũng vì vậy **không đổi `mode` giữa bài đơn ↔ `combo`** sau khi tạo: bài đơn đang là bài con mà thành combo ⇒ lồng hai tầng; combo thành bài đơn ⇒ bài con mồ côi.
 - **Bài con COPY thông số từ thư viện lúc thêm** (như item giáo án). Nhưng **item giáo án trỏ tới bài kết hợp chỉ copy số vòng / nghỉ giữa vòng; danh sách bài con là live** — bài kết hợp là "khối dùng lại", sửa khối thì mọi giáo án dùng nó đổi theo, là hành vi người dùng chờ đợi. Sửa danh sách bài con = ghi đè cả cụm trong một `db.batch` (UPDATE + DELETE + INSERT).
@@ -192,6 +197,7 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 | Exercises (thư viện bài tập) + Presets (bộ mẫu) | `docs/bridges/exercises.md` |
 | Routines (giáo án + item) | `docs/bridges/routines.md` |
 | Sessions (buổi tập) | `docs/bridges/sessions.md` |
-| Stats (streak, tuần, heatmap, hôm nay) | `docs/bridges/stats.md` |
+| Stats (streak, tuần, heatmap) | `docs/bridges/stats.md` |
+| Programs (chương trình, giai đoạn, lịch) + Plan (lịch ngày, bỏ qua / đổi / thêm buổi) | `docs/bridges/programs.md` |
 
 **Quy trình bridge-doc cuốn chiếu** (giữ nguyên từ mia-finance): xong backend một module ⇒ viết/cập nhật bridge-doc NGAY trong cùng đợt, shape lấy từ response thật (`yarn dev` + curl), không bịa từ đọc code.

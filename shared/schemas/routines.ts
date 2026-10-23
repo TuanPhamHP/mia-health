@@ -1,13 +1,11 @@
 import { z } from 'zod';
 import { boolQuery, hasAnyField, optQuery, paramFields } from './common';
 
-const scheduleMask = z.number().int().min(0).max(127);
 const prepSec = z.number().int().min(0).max(60);
 
 export const createRoutineSchema = z.object({
 	name: z.string().trim().min(1, 'Tên giáo án không được rỗng').max(100),
 	description: z.string().max(2000).nullable().optional(),
-	scheduleMask: scheduleMask.optional(),
 	prepSec: prepSec.optional(),
 });
 
@@ -15,8 +13,7 @@ export const updateRoutineSchema = z
 	.object({
 		name: z.string().trim().min(1).max(100).optional(),
 		description: z.string().max(2000).nullable().optional(),
-		scheduleMask: scheduleMask.optional(),
-		prepSec: prepSec.optional(),
+			prepSec: prepSec.optional(),
 		sortOrder: z.number().int().min(0).optional(),
 		isArchived: z.boolean().optional(),
 	})

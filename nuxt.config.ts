@@ -40,7 +40,7 @@ export default defineNuxtConfig({
   // Bundle icon vào client: màn hình tập phải chạy được khi mạng chập chờn (phòng gym,
   // PWA offline) — không phụ thuộc Iconify API lúc runtime.
   // `scan` chỉ bắt tên icon viết thẳng trong template; icon chọn động qua map
-  // (CATEGORY_ICONS, COMBO_ICON ở app/utils/labels.ts) phải liệt kê tay, nếu không sẽ trống khi offline.
+  // (CATEGORY_ICONS, GOAL_ICONS, COMBO_ICON ở app/utils/labels.ts) phải liệt kê tay, nếu không sẽ trống khi offline.
   icon: {
     clientBundle: {
       scan: true,
@@ -55,6 +55,10 @@ export default defineNuxtConfig({
         'heroicons:squares-plus',
         'heroicons:check-circle-solid',
         'heroicons:stop',
+        // GOAL_ICONS (mục tiêu chương trình) — fire/bolt/heart/arrows-pointing-out đã có ở trên
+        'heroicons:shield-check',
+        'heroicons:lifebuoy',
+        'heroicons:flag',
       ],
     },
   },

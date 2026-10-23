@@ -11,7 +11,6 @@ import type { RoutineDetailComputed, RoutineItemComputed, RoutineSummaryComputed
 export interface CreateRoutineData {
 	name: string;
 	description?: string | null;
-	scheduleMask?: number;
 	prepSec?: number;
 }
 
@@ -65,7 +64,9 @@ function toItem(
 	};
 }
 
-function toDetail(routine: Routine, items: RoutineItemComputed[]): RoutineDetailComputed {
+type ProgramRef = { id: number; name: string };
+
+function toDetail(routine: Routine, items: RoutineItemComputed[], programs: ProgramRef[]): RoutineDetailComputed {
 	const plan = items.flatMap((it, index) => toPlanItems(it, index));
 	return {
 		...routine,
@@ -77,8 +78,37 @@ function toDetail(routine: Routine, items: RoutineItemComputed[]): RoutineDetail
 			isCombo: it.exercise.mode === 'combo',
 			cover: coverOf(it.exercise),
 		})),
+		programs,
 		items,
 	};
+}
+
+/** routineId → chương trình có lịch dùng giáo án đó. */
+async function programsByRoutine(): Promise<Map<number, ProgramRef[]>> {
+	const byRoutine = new Map<number, ProgramRef[]>();
+	for (const { routineId, ...program } of await repo.listProgramUsage()) {
+		const list = byRoutine.get(routineId) ?? [];
+		list.push(program);
+		byRoutine.set(routineId, list);
+	}
+	return byRoutine;
+}
+
+async function summarize(rows: Routine[]): Promise<RoutineSummaryComputed[]> {
+	const [items, programs] = await Promise.all([
+		repo.listItemsWithExercise(rows.map((r) => r.id)).then(toItems),
+		programsByRoutine(),
+	]);
+	const byRoutine = new Map<number, RoutineItemComputed[]>();
+	for (const it of items) {
+		const list = byRoutine.get(it.routineId) ?? [];
+		list.push(it);
+		byRoutine.set(it.routineId, list);
+	}
+	return rows.map((r) => {
+		const { items: _items, ...summary } = toDetail(r, byRoutine.get(r.id) ?? [], programs.get(r.id) ?? []);
+		return summary;
+	});
 }
 
 async function assertNameFree(name: string, exceptId?: number) {
@@ -99,24 +129,26 @@ export async function routineExists(id: number): Promise<boolean> {
 }
 
 export async function listRoutines(filter: { includeArchived?: boolean }): Promise<RoutineSummaryComputed[]> {
-	const rows = await repo.listRoutines(filter);
-	const items = await toItems(await repo.listItemsWithExercise(rows.map((r) => r.id)));
-	const byRoutine = new Map<number, RoutineItemComputed[]>();
-	for (const it of items) {
-		const list = byRoutine.get(it.routineId) ?? [];
-		list.push(it);
-		byRoutine.set(it.routineId, list);
-	}
-	return rows.map((r) => {
-		const { items: _items, ...summary } = toDetail(r, byRoutine.get(r.id) ?? []);
-		return summary;
-	});
+	return summarize(await repo.listRoutines(filter));
+}
+
+/** Tóm tắt (số bài, thời lượng, ảnh) của các giáo án theo id — cho ô lịch của chương trình. */
+export async function summariesByIds(ids: number[]): Promise<Map<number, RoutineSummaryComputed>> {
+	const rows = await repo.listRoutinesByIds([...new Set(ids)]);
+	return new Map((await summarize(rows)).map((r) => [r.id, r]));
+}
+
+export function findRoutines(ids: number[]): Promise<Routine[]> {
+	return repo.listRoutinesByIds([...new Set(ids)]);
 }
 
 export async function getRoutine(id: number): Promise<RoutineDetailComputed> {
 	const routine = await requireRoutine(id);
-	const items = await toItems(await repo.listItemsWithExercise([id]));
-	return toDetail(routine, items);
+	const [items, programs] = await Promise.all([
+		repo.listItemsWithExercise([id]).then(toItems),
+		programsByRoutine(),
+	]);
+	return toDetail(routine, items, programs.get(id) ?? []);
 }
 
 export async function addRoutine(data: CreateRoutineData): Promise<RoutineDetailComputed> {
@@ -128,7 +160,7 @@ export async function addRoutine(data: CreateRoutineData): Promise<RoutineDetail
 		description: data.description ?? null,
 		sortOrder,
 	});
-	return toDetail(saved, []);
+	return toDetail(saved, [], []);
 }
 
 export async function editRoutine(id: number, data: UpdateRoutineData): Promise<RoutineDetailComputed> {
@@ -140,8 +172,16 @@ export async function editRoutine(id: number, data: UpdateRoutineData): Promise<
 }
 
 // Item đi theo (CASCADE); buổi tập đã ghi giữ nguyên, routine_id về NULL, `title` giữ tên.
+// Đang có trong lịch chương trình ⇒ 409, KHÔNG tự gỡ: âm thầm làm hụt một buổi của chương
+// trình người dùng đã soạn là mất dữ liệu (cùng lý do với bài tập trong giáo án).
 export async function deleteRoutine(id: number): Promise<RoutineDetailComputed> {
 	const dto = await getRoutine(id);
+	if (dto.programs.length > 0) {
+		throw createError({
+			statusCode: 409,
+			message: `Giáo án đang nằm trong lịch của ${dto.programs.length} chương trình — gỡ khỏi chương trình hoặc lưu trữ thay vì xoá`,
+		});
+	}
 	await repo.removeRoutine(id);
 	return dto;
 }

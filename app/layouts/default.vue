@@ -26,7 +26,8 @@
 	// Bottom nav: 2 tab | nút "Tập" ở giữa | 2 tab.
 	const leftTabs = [
 		{ label: 'Hôm nay', icon: 'i-heroicons-sun', to: '/' },
-		{ label: 'Giáo án', icon: 'i-heroicons-clipboard-document-list', to: '/routines' },
+		// Chương trình + giáo án chung một tab: hai mục chuyển qua lại bằng PlanTabs.
+		{ label: 'Kế hoạch', icon: 'i-heroicons-clipboard-document-list', to: '/programs', also: '/routines' },
 	];
 	const rightTabs = [
 		{ label: 'Bài tập', icon: 'i-heroicons-book-open', to: '/exercises' },
@@ -52,14 +53,19 @@
 	});
 
 	const parentRoute = computed(() => {
+		if (/^\/programs\/[^/]+$/.test(route.path)) return '/programs';
 		if (/^\/routines\/[^/]+$/.test(route.path)) return '/routines';
 		if (/^\/exercises\/[^/]+$/.test(route.path)) return '/exercises';
 		return null;
 	});
 
-	function isTabActive(to: string): boolean {
+	function matches(to: string): boolean {
 		if (to === '/') return route.path === '/';
 		return route.path === to || route.path.startsWith(to + '/');
+	}
+
+	function isTabActive(tab: { to: string; also?: string }): boolean {
+		return matches(tab.to) || (tab.also !== undefined && matches(tab.also));
 	}
 </script>
 
@@ -133,7 +139,7 @@
 					:key="tab.to"
 					:to="tab.to"
 					class="flex flex-1 flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors"
-					:class="isTabActive(tab.to) ? 'text-(--ui-primary)' : 'text-(--ui-text-muted)'"
+					:class="isTabActive(tab) ? 'text-(--ui-primary)' : 'text-(--ui-text-muted)'"
 				>
 					<UIcon :name="tab.icon" class="size-6 shrink-0" />
 					<span class="text-[10px] font-medium leading-none">{{ tab.label }}</span>
@@ -157,7 +163,7 @@
 					:key="tab.to"
 					:to="tab.to"
 					class="flex flex-1 flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors"
-					:class="isTabActive(tab.to) ? 'text-(--ui-primary)' : 'text-(--ui-text-muted)'"
+					:class="isTabActive(tab) ? 'text-(--ui-primary)' : 'text-(--ui-text-muted)'"
 				>
 					<UIcon :name="tab.icon" class="size-6 shrink-0" />
 					<span class="text-[10px] font-medium leading-none">{{ tab.label }}</span>

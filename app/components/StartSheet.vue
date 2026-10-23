@@ -1,27 +1,33 @@
 <script setup lang="ts">
 	/**
 	 * Sheet "Bắt đầu tập" — gắn vào nút chính giữa bottom nav.
-	 * Giáo án có lịch hôm nay xếp trước; chạm là vào thẳng màn hình tập.
+	 * Buổi trong lịch hôm nay (chương trình đang theo + buổi thêm riêng, trừ buổi đã bỏ qua)
+	 * xếp trước; chạm là vào thẳng màn hình tập.
 	 */
-	import { isScheduledOn } from '#shared/utils/weekday';
 	import { localDateIso } from '#shared/utils/date';
 	import { formatDuration } from '~/utils/format';
 
 	const open = defineModel<boolean>('open', { default: false });
 	const { routines, loading, list } = useRoutines();
-
-	const today = ref(localDateIso());
+	const { plan, load: loadPlan } = usePlan();
 
 	watch(open, (v) => {
 		if (!v) return;
-		today.value = localDateIso();
 		list();
+		loadPlan(localDateIso());
+	});
+
+	const todayIds = computed(() => {
+		const p = plan.value;
+		if (!p) return new Set<number>();
+		const entries = [...p.programs.flatMap((g) => g.entries), ...p.extras].filter((e) => !e.skipped);
+		return new Set(entries.map((e) => e.routine.id));
 	});
 
 	const sorted = computed(() =>
 		[...routines.value]
 			.filter((r) => r.itemCount > 0)
-			.sort((a, b) => Number(isScheduledOn(b.scheduleMask, today.value)) - Number(isScheduledOn(a.scheduleMask, today.value))),
+			.sort((a, b) => Number(todayIds.value.has(b.id)) - Number(todayIds.value.has(a.id))),
 	);
 
 	async function go(to: string) {
@@ -51,7 +57,7 @@
 						{{ r.itemCount }} bài · ~{{ formatDuration(r.estimatedSec) }}
 					</span>
 				</span>
-				<UBadge v-if="isScheduledOn(r.scheduleMask, today)" color="primary" variant="soft" size="sm">Hôm nay</UBadge>
+				<UBadge v-if="todayIds.has(r.id)" color="primary" variant="soft" size="sm">Hôm nay</UBadge>
 				<UIcon name="i-heroicons-play-circle-solid" class="size-8 shrink-0 text-(--ui-primary)" />
 			</button>
 

@@ -139,7 +139,8 @@ export type ExerciseMedia = typeof exerciseMedia.$inferSelect;
 export type NewExerciseMedia = typeof exerciseMedia.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Giáo án (routine) = danh sách bài tập có thứ tự + lịch theo thứ trong tuần
+// Giáo án (routine) = một buổi tập: danh sách bài có thứ tự. KHÔNG mang lịch — lịch nằm ở
+// chương trình (program_slots), một chỗ duy nhất để biết vì sao hôm nay phải tập buổi này.
 // ---------------------------------------------------------------------------
 
 export const routines = sqliteTable(
@@ -148,9 +149,6 @@ export const routines = sqliteTable(
 		id: integer('id').primaryKey({ autoIncrement: true }),
 		name: text('name').notNull(),
 		description: text('description'),
-		// Bitmask thứ trong tuần theo ISO: bit 0 = Thứ 2 … bit 6 = Chủ nhật.
-		// 127 = mọi ngày, 0 = không lên lịch (chỉ bắt đầu thủ công).
-		scheduleMask: integer('schedule_mask').notNull().default(127),
 		prepSec: integer('prep_sec').notNull().default(5), // đếm ngược chuẩn bị trước mỗi bài
 		sortOrder: integer('sort_order').notNull().default(0),
 		isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
@@ -200,6 +198,115 @@ export const routineItems = sqliteTable(
 
 export type RoutineItem = typeof routineItems.$inferSelect;
 export type NewRoutineItem = typeof routineItems.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Chương trình = mục tiêu + các giai đoạn nối tiếp, mỗi giai đoạn một lịch tuần (thứ → giáo án)
+// ---------------------------------------------------------------------------
+
+export const PROGRAM_GOALS = ['fat_loss', 'muscle', 'health', 'rehab', 'pelvic', 'mobility', 'other'] as const;
+export type ProgramGoal = (typeof PROGRAM_GOALS)[number];
+
+export const programs = sqliteTable(
+	'programs',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		name: text('name').notNull(),
+		goal: text('goal', { enum: PROGRAM_GOALS }).notNull(),
+		description: text('description'), // "vì sao" — hiện ở màn Hôm nay
+		// 'YYYY-MM-DD' giờ địa phương do client gửi (như sessions.date); null = không theo.
+		// Tuần 1 = tuần ISO chứa ngày này. Nhiều chương trình được theo cùng lúc.
+		startDate: text('start_date'),
+		// Hết giai đoạn cuối: true ⇒ quay lại giai đoạn 1, false ⇒ chương trình hoàn thành.
+		repeat: integer('repeat', { mode: 'boolean' }).notNull().default(false),
+		sortOrder: integer('sort_order').notNull().default(0),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [uniqueIndex('programs_name_unique').on(t.name)],
+);
+
+export type Program = typeof programs.$inferSelect;
+export type NewProgram = typeof programs.$inferInsert;
+
+export const programPhases = sqliteTable(
+	'program_phases',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		programId: integer('program_id')
+			.notNull()
+			.references(() => programs.id, { onDelete: 'cascade' }),
+		position: integer('position').notNull().default(0),
+		name: text('name').notNull(),
+		weeks: integer('weeks').notNull().default(4),
+		note: text('note'), // lời dặn của giai đoạn (VD "tăng tạ 5–10%") — hiện ở màn Hôm nay
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [index('program_phases_program_idx').on(t.programId)],
+);
+
+export type ProgramPhase = typeof programPhases.$inferSelect;
+export type NewProgramPhase = typeof programPhases.$inferInsert;
+
+// Một buổi trong lịch tuần của giai đoạn. Giáo án THAM CHIẾU (không copy như item giáo án):
+// sửa giáo án là sửa buổi tập ở mọi chương trình dùng nó — cùng lý do với bài kết hợp.
+export const programSlots = sqliteTable(
+	'program_slots',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		phaseId: integer('phase_id')
+			.notNull()
+			.references(() => programPhases.id, { onDelete: 'cascade' }),
+		weekday: integer('weekday').notNull(), // ISO 1 = Thứ 2 … 7 = Chủ nhật
+		// RESTRICT: service chặn xoá giáo án đang nằm trong chương trình (409, gợi ý lưu trữ).
+		routineId: integer('routine_id')
+			.notNull()
+			.references(() => routines.id, { onDelete: 'restrict' }),
+		position: integer('position').notNull().default(0), // thứ tự trong cùng một ngày
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [
+		index('program_slots_phase_idx').on(t.phaseId),
+		index('program_slots_routine_idx').on(t.routineId),
+	],
+);
+
+export type ProgramSlot = typeof programSlots.$inferSelect;
+export type NewProgramSlot = typeof programSlots.$inferInsert;
+
+// Thay đổi lịch CHỈ cho một ngày — sửa lâu dài thì sửa chương trình:
+//   skip — bỏ buổi `routineId` của chương trình `programId` hôm đó
+//   swap — tập `replacementId` thay cho buổi `routineId` của chương trình `programId`
+//   add  — thêm buổi `routineId` ngoài mọi chương trình (`programId` null)
+export const PLAN_CHANGE_KINDS = ['skip', 'swap', 'add'] as const;
+export type PlanChangeKind = (typeof PLAN_CHANGE_KINDS)[number];
+
+export const planChanges = sqliteTable(
+	'plan_changes',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		date: text('date').notNull(), // 'YYYY-MM-DD' giờ địa phương của client
+		kind: text('kind', { enum: PLAN_CHANGE_KINDS }).notNull(),
+		programId: integer('program_id').references(() => programs.id, { onDelete: 'cascade' }),
+		routineId: integer('routine_id')
+			.notNull()
+			.references(() => routines.id, { onDelete: 'cascade' }),
+		replacementId: integer('replacement_id').references(() => routines.id, { onDelete: 'cascade' }),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [index('plan_changes_date_idx').on(t.date)],
+);
+
+export type PlanChange = typeof planChanges.$inferSelect;
+export type NewPlanChange = typeof planChanges.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Buổi tập đã thực hiện

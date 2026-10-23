@@ -1,5 +1,7 @@
 # Bridge — Routines (giáo án)
 
+> Giáo án = **một buổi tập** (danh sách bài). KHÔNG mang lịch — lịch theo thứ nằm ở chương trình (xem `programs.md`).
+
 > Shape lấy từ response thật (`yarn dev` + curl, 2026-10-23).
 
 ## Data model
@@ -11,7 +13,6 @@
 | `id` | number | |
 | `name` | string | Duy nhất, không phân biệt hoa thường |
 | `description` | string \| null | |
-| `scheduleMask` | number (0–127) | Bit (isoDay − 1): bit 0 = Thứ 2 … bit 6 = CN. 127 = mỗi ngày, 0 = không lịch. Helper: `shared/utils/weekday.ts` |
 | `prepSec` | number (0–60) | Đếm ngược chuẩn bị trước mỗi bài |
 | `sortOrder` | number | Tạo mới = max + 1 |
 | `isArchived` | boolean | |
@@ -27,6 +28,7 @@
 |-------|-----------|
 | `itemCount` | số item |
 | `previews` | `ExercisePreviewDTO[]` — tối đa 4 item đầu, để vẽ ô ảnh ghép |
+| `programs` | `{ id, name }[]` — chương trình có lịch dùng giáo án này (khác nhau, theo `sortOrder` chương trình) |
 | `estimatedSec` | `estimateTimelineSec(buildTimeline(items.flatMap(toPlanItems), prepSec))` — cùng hàm player dùng; mode `reps` ước 3 giây/lần; bài kết hợp tính theo bài con |
 
 ### `RoutineDetailDTO` = `RoutineSummaryDTO` + `items: RoutineItemDTO[]` (theo `position`)
@@ -43,8 +45,9 @@
 ```json
 {
   "id": 1, "name": "Kegel hằng ngày", "description": "Thở bụng khởi động, rồi Kegel chậm và Kegel nhanh.",
-  "scheduleMask": 127, "prepSec": 5, "sortOrder": 0, "isArchived": false,
+  "prepSec": 5, "sortOrder": 0, "isArchived": false,
   "createdAt": "2026-10-23T06:02:46.000Z", "updatedAt": null, "itemCount": 3, "estimatedSec": 571,
+  "programs": [{ "id": 2, "name": "Sàn chậu & sinh lý nam" }],
   "items": [{
     "id": 1, "routineId": 1, "exerciseId": 3, "position": 0,
     "sets": 1, "reps": 10, "holdSec": 4, "relaxSec": 6, "durationSec": 30, "restSec": 0,
@@ -59,9 +62,9 @@
 | Method | Path | Request | Response |
 |--------|------|---------|----------|
 | GET | `/api/routines` | query `includeArchived?` | `RoutineSummaryDTO[]` (theo sortOrder, id) |
-| POST | `/api/routines` | `{ name, description?, scheduleMask?, prepSec? }` | `RoutineDetailDTO` |
+| POST | `/api/routines` | `{ name, description?, prepSec? }` | `RoutineDetailDTO` |
 | GET | `/api/routines/:id` | | `RoutineDetailDTO` |
-| PATCH | `/api/routines/:id` | `{ name?, description?, scheduleMask?, prepSec?, sortOrder?, isArchived? }` | `RoutineDetailDTO` |
+| PATCH | `/api/routines/:id` | `{ name?, description?, prepSec?, sortOrder?, isArchived? }` | `RoutineDetailDTO` |
 | DELETE | `/api/routines/:id` | | `RoutineDetailDTO` (trước khi xoá) |
 | POST | `/api/routines/:id/items` | `{ exerciseId, sets?, reps?, holdSec?, relaxSec?, durationSec?, restSec? }` — bỏ trống ⇒ copy từ bài | `RoutineDetailDTO` |
 | PATCH | `/api/routines/:id/items/:itemId` | thông số, ít nhất 1 field | `RoutineDetailDTO` |
@@ -100,8 +103,10 @@ FE/player trải item thành bài con bằng `toPlanItems(item, index)` (`shared
 | 404 | Giáo án không tồn tại | `Giáo án không tồn tại` |
 | 404 | Item không thuộc giáo án | `Bài trong giáo án không tồn tại` |
 | 409 | Trùng tên | `Đã có giáo án tên "…"` |
+| 409 | Xoá giáo án đang nằm trong lịch chương trình | `Giáo án đang nằm trong lịch của 1 chương trình — gỡ khỏi chương trình hoặc lưu trữ thay vì xoá` |
 
 ## Callout FE
 
 - Xoá giáo án: item xoá theo (CASCADE); buổi tập đã ghi **giữ nguyên**, `routineId` về `null`, `title` còn tên.
-- Muốn biết giáo án có lịch hôm nay: `isScheduledOn(scheduleMask, localDateIso())` — hoặc dùng `GET /api/stats/today`.
+- Muốn biết hôm nay tập giáo án nào: `GET /api/plan/today?date=` (xem `programs.md`) — giáo án tự nó không có lịch.
+- Lưu trữ giáo án đang nằm trong lịch: lịch vẫn giữ nó (vẫn hiện ở Hôm nay); chỉ chặn thêm **mới** giáo án đã lưu trữ vào lịch.

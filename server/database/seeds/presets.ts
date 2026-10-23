@@ -1,4 +1,4 @@
-import { daysToMask } from '../../../shared/utils/weekday';
+import type { ProgramGoal } from '../schema';
 import type { CreateExerciseData } from '../../services/exercises';
 
 // Bộ bài tập + giáo án mẫu. Seed idempotent THEO TÊN (POST /api/presets/seed): bài/giáo án
@@ -203,7 +203,7 @@ const HOME_GYM_EXERCISES: ExercisePreset[] = [
 		sets: 8,
 		durationSec: 30,
 		restSec: 60,
-		instructions: 'Thay cho 4×4 khi muốn đổi bài. 30 giây chạy nhanh (~8/10 sức) — 60 giây đi bộ chậm trên máy (phần nghỉ). Máy cần vài giây để đổi tốc độ: bấm tăng tốc ở ~5 giây cuối phần nghỉ. Không nhảy lên / xuống băng chuyền đang chạy, không bám tay vịn khi chạy nhanh.',
+		instructions: '30 giây chạy nhanh (~8/10 sức) — 60 giây đi bộ chậm trên máy (phần nghỉ). Máy cần vài giây để đổi tốc độ: bấm tăng tốc ở ~5 giây cuối phần nghỉ. Không nhảy lên / xuống băng chuyền đang chạy, không bám tay vịn khi chạy nhanh.',
 	},
 
 	// --- Tạ ấm / tạ tay: đốt mỡ, chạy theo đồng hồ ---
@@ -654,7 +654,6 @@ export const EXERCISE_PRESETS: ExercisePreset[] = [...BASE_EXERCISES, ...HOME_GY
 export interface RoutinePreset {
 	name: string;
 	description: string;
-	scheduleMask: number;
 	prepSec: number;
 	items: PresetRef[];
 }
@@ -663,14 +662,12 @@ const BASE_ROUTINES: RoutinePreset[] = [
 	{
 		name: 'Kegel hằng ngày',
 		description: 'Thở bụng khởi động, rồi Kegel chậm và Kegel nhanh.',
-		scheduleMask: daysToMask([1, 2, 3, 4, 5, 6, 7]),
 		prepSec: 5,
 		items: [{ name: 'Thở bụng thả lỏng sàn chậu' }, { name: 'Kegel giữ lâu' }, { name: 'Kegel nhanh' }],
 	},
 	{
 		name: 'Core & thể dục dụng cụ cơ bản',
 		description: 'Bài nền cho cơ trung tâm: hollow, plank, cầu mông, hít đất, squat.',
-		scheduleMask: daysToMask([1, 3, 5]),
 		prepSec: 10,
 		items: [
 			{ name: 'Hollow hold' },
@@ -683,21 +680,17 @@ const BASE_ROUTINES: RoutinePreset[] = [
 	{
 		name: 'Giãn cơ buổi tối',
 		description: 'Thả lỏng hông và lưng trước khi ngủ.',
-		scheduleMask: daysToMask([2, 4, 6, 7]),
 		prepSec: 5,
 		items: [{ name: "Tư thế em bé (Child's pose)" }, { name: 'Giãn cơ hông (Pigeon)' }, { name: 'Thở bụng thả lỏng sàn chậu' }],
 	},
 ];
 
-// Giáo án buổi sáng T2 → CN, 30–40 phút/buổi (test khoá khung thời lượng), mục tiêu giảm mỡ +
-// chức năng cương. Cơ sở: cardio vừa–cao ~160 phút/tuần (Gerbild 2018, Sex Med), HIIT giảm mỡ
-// tương đương cardio đều với ít thời gian hơn (Wewege 2017), sức mạnh mỗi nhóm cơ 2 buổi/tuần,
-// sàn chậu mỗi ngày (Dorey 2004). Lịch: sức mạnh T2/T4/T6 xen cardio T3/T5/T7, CN phục hồi.
-export const WEEKLY_PLAN: RoutinePreset[] = [
+// Giáo án buổi sáng của chương trình "Giảm mỡ tại nhà", 30–40 phút/buổi (test khoá khung thời
+// lượng). Lịch theo thứ nằm ở PROGRAM_PRESETS bên dưới.
+export const MORNING_ROUTINES: RoutinePreset[] = [
 	{
 		name: 'T2 · Thân dưới & mông',
 		description: 'Squat, gập hông, một chân, mông — nhóm cơ lớn nhất, đốt nhiều năng lượng nhất. Kết bằng swing tạ ấm.',
-		scheduleMask: daysToMask([1]),
 		prepSec: 10,
 		items: [
 			{ name: 'Khởi động toàn thân' },
@@ -713,7 +706,6 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	{
 		name: 'T3 · HIIT tạ ấm đốt mỡ',
 		description: 'Mạch 5 bài × 4 vòng (40 giây làm / 20 giây chuyển) + plank nghiêng. Ít thời gian mà giảm mỡ ngang cardio đều.',
-		scheduleMask: daysToMask([2]),
 		prepSec: 10,
 		items: [
 			{ name: 'Khởi động toàn thân' },
@@ -726,7 +718,6 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	{
 		name: 'T4 · Thân trên đẩy – kéo',
 		description: 'Ba superset: ngực / lưng, vai / lưng trên, tay sau / tay trước.',
-		scheduleMask: daysToMask([3]),
 		prepSec: 10,
 		items: [
 			{ name: 'Khởi động toàn thân' },
@@ -740,7 +731,6 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	{
 		name: 'T5 · Zone 2 + core',
 		description: 'Đi bộ leo dốc ~23 phút ở nhịp tim vừa phải + mạch core. Cardio đều đặn là nền cho tim mạch và chức năng cương.',
-		scheduleMask: daysToMask([4]),
 		prepSec: 10,
 		items: [
 			{ name: 'Đi bộ nhanh khởi động', durationSec: 180 },
@@ -751,9 +741,20 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 		],
 	},
 	{
+		name: 'T5 · Chạy biến tốc + core',
+		description: 'Giai đoạn 2: thay đi bộ Zone 2 bằng 8 hiệp chạy nhanh 30 giây — thêm một buổi cường độ cao, đốt nhiều hơn trong cùng thời gian.',
+		prepSec: 10,
+		items: [
+			{ name: 'Đi bộ nhanh khởi động' },
+			{ name: 'Chạy biến tốc 30/60' },
+			{ name: 'Mạch core' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
 		name: 'T6 · Toàn thân sức mạnh',
 		description: 'Deadlift sumo + hít đất, lunge + chèo tạ, xách tạ đi bộ, swing tạ ấm.',
-		scheduleMask: daysToMask([5]),
 		prepSec: 10,
 		items: [
 			{ name: 'Khởi động toàn thân' },
@@ -767,8 +768,7 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	},
 	{
 		name: 'T7 · Chạy 4×4',
-		description: 'Interval 4×4 trên máy chạy — buổi nặng nhất tuần về tim mạch, nâng VO2max. Muốn đổi bài thì thay bằng "Chạy biến tốc 30/60".',
-		scheduleMask: daysToMask([6]),
+		description: 'Interval 4×4 trên máy chạy — buổi nặng nhất tuần về tim mạch, nâng VO2max.',
 		prepSec: 10,
 		items: [
 			{ name: 'Đi bộ nhanh khởi động' },
@@ -780,7 +780,6 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	{
 		name: 'CN · Phục hồi chủ động',
 		description: 'Đi bộ dốc nhẹ, cầu mông + sàn chậu, giãn hông, thở. Vẫn vận động nhưng để cơ hồi lại cho tuần mới.',
-		scheduleMask: daysToMask([7]),
 		prepSec: 10,
 		items: [
 			{ name: 'Đi bộ nhanh khởi động', durationSec: 180 },
@@ -794,4 +793,104 @@ export const WEEKLY_PLAN: RoutinePreset[] = [
 	},
 ];
 
-export const ROUTINE_PRESETS: RoutinePreset[] = [...BASE_ROUTINES, ...WEEKLY_PLAN];
+export const ROUTINE_PRESETS: RoutinePreset[] = [...BASE_ROUTINES, ...MORNING_ROUTINES];
+
+export interface ProgramPreset {
+	name: string;
+	goal: ProgramGoal;
+	description: string;
+	repeat: boolean;
+	/** Bộ mẫu theo luôn từ ngày seed (`today` client gửi) — chương trình "đang theo" mặc định. */
+	follow: boolean;
+	/** `days`: ISO weekday (1 = T2 … 7 = CN) → tên giáo án theo thứ tự trong ngày. */
+	phases: { name: string; weeks: number; note: string | null; days: Record<number, string[]> }[];
+}
+
+function everyDay(routine: string): Record<number, string[]> {
+	return Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [d, [routine]]));
+}
+
+const FAT_LOSS_WEEK: Record<number, string[]> = {
+	1: ['T2 · Thân dưới & mông'],
+	2: ['T3 · HIIT tạ ấm đốt mỡ'],
+	3: ['T4 · Thân trên đẩy – kéo'],
+	4: ['T5 · Zone 2 + core'],
+	5: ['T6 · Toàn thân sức mạnh'],
+	6: ['T7 · Chạy 4×4'],
+	7: ['CN · Phục hồi chủ động'],
+};
+
+// Chương trình mẫu theo MỤC TIÊU. Cơ sở của "Giảm mỡ tại nhà": cardio vừa–cao ~160 phút/tuần
+// (Gerbild 2018, Sex Med), HIIT giảm mỡ tương đương cardio đều với ít thời gian hơn (Wewege
+// 2017), sức mạnh mỗi nhóm cơ 2 buổi/tuần, sàn chậu mỗi ngày (Dorey 2004). Lịch: sức mạnh
+// T2/T4/T6 xen cardio T3/T5/T7, CN phục hồi; giai đoạn 2 tăng tạ và thêm một buổi cường độ cao.
+export const PROGRAM_PRESETS: ProgramPreset[] = [
+	{
+		name: 'Giảm mỡ tại nhà',
+		goal: 'fat_loss',
+		description:
+			'Giảm mỡ, giữ cơ, khoẻ tim mạch và chức năng cương — 30–40 phút mỗi sáng với tạ ấm, tạ tay, ghế, máy chạy bộ. Sức mạnh 3 buổi/tuần (T2, T4, T6) để giữ cơ khi ăn thâm hụt; cardio vừa–cao ~160 phút/tuần — mức các nghiên cứu về chức năng cương dùng; HIIT đốt mỡ ngang cardio đều với ít thời gian hơn; Kegel cuối mỗi buổi. Cân nặng giảm chủ yếu nhờ ăn: thâm hụt 300–500 kcal/ngày, đạm 1,6–2 g/kg.',
+		repeat: false,
+		follow: true,
+		phases: [
+			{
+				name: 'Nền tảng',
+				weeks: 4,
+				note: 'Học kỹ thuật, chọn mức tạ để 2 lần cuối mỗi set nặng mà vẫn đúng kỹ thuật. Làm đủ số lần ở mọi set thì buổi sau tăng một nấc tạ.',
+				days: FAT_LOSS_WEEK,
+			},
+			{
+				name: 'Tăng cường độ',
+				weeks: 4,
+				note: 'Tạ nặng hơn 5–10% so với cuối giai đoạn 1. T5 đổi đi bộ Zone 2 thành chạy biến tốc — 3 buổi cường độ cao mỗi tuần (T3, T5, T7). Mệt dồn, ngủ kém thì bấm "Đổi buổi" về "T5 · Zone 2 + core".',
+				days: { ...FAT_LOSS_WEEK, 4: ['T5 · Chạy biến tốc + core'] },
+			},
+		],
+	},
+	{
+		name: 'Sàn chậu & sinh lý nam',
+		goal: 'pelvic',
+		description:
+			'Buổi Kegel thứ hai trong ngày (buổi tối, ~10 phút) — phác đồ Dorey tập cả sáng lẫn tối, buổi sáng đã nằm cuối mỗi giáo án tập. Trong thử nghiệm của Dorey, chức năng cương cải thiện rõ ở tháng 3 và tiếp tục tới tháng 6.',
+		repeat: true,
+		follow: true,
+		phases: [
+			{
+				name: '6 tháng đầu',
+				weeks: 26,
+				note: 'Đều đặn quan trọng hơn cố sức: siết đúng cơ, thả lỏng hoàn toàn giữa các lần.',
+				days: everyDay('Kegel hằng ngày'),
+			},
+		],
+	},
+	{
+		name: 'Core cơ bản không dụng cụ',
+		goal: 'health',
+		description: 'Bài nền cho cơ trung tâm, không cần dụng cụ — hợp khi đi công tác hoặc chưa quen tạ.',
+		repeat: true,
+		follow: false,
+		phases: [
+			{
+				name: 'Hằng tuần',
+				weeks: 1,
+				note: null,
+				days: { 1: ['Core & thể dục dụng cụ cơ bản'], 3: ['Core & thể dục dụng cụ cơ bản'], 5: ['Core & thể dục dụng cụ cơ bản'] },
+			},
+		],
+	},
+	{
+		name: 'Thư giãn buổi tối',
+		goal: 'mobility',
+		description: 'Giãn hông và lưng trước khi ngủ, vài phút.',
+		repeat: true,
+		follow: false,
+		phases: [
+			{
+				name: 'Hằng tuần',
+				weeks: 1,
+				note: null,
+				days: { 2: ['Giãn cơ buổi tối'], 4: ['Giãn cơ buổi tối'], 6: ['Giãn cơ buổi tối'], 7: ['Giãn cơ buổi tối'] },
+			},
+		],
+	},
+];

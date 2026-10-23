@@ -12,6 +12,7 @@ export type RoutineSummaryComputed = Routine & {
 	itemCount: number;
 	estimatedSec: number;
 	previews: ExercisePreviewDTO[];
+	programs: { id: number; name: string }[];
 };
 export type RoutineDetailComputed = RoutineSummaryComputed & { items: RoutineItemComputed[] };
 

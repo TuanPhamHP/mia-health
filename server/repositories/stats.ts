@@ -46,15 +46,3 @@ export function categoryAggregate(from: string, to: string) {
 		.groupBy(sessionEntries.category)
 		.orderBy(desc(setsDone));
 }
-
-/** routineId → số buổi đã ghi trong ngày. */
-export async function countByRoutineOnDate(date: string): Promise<Map<number, number>> {
-	const rows = await useDB()
-		.select({ routineId: workoutSessions.routineId, sessions: sql<number>`COUNT(*)` })
-		.from(workoutSessions)
-		.where(eq(workoutSessions.date, date))
-		.groupBy(workoutSessions.routineId);
-	const out = new Map<number, number>();
-	for (const r of rows) if (r.routineId != null) out.set(r.routineId, r.sessions);
-	return out;
-}

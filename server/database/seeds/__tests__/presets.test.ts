@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EXERCISE_PRESETS, ROUTINE_PRESETS, WEEKLY_PLAN } from '../presets';
+import { EXERCISE_PRESETS, MORNING_ROUTINES, PROGRAM_PRESETS, ROUTINE_PRESETS } from '../presets';
 import type { RoutinePreset } from '../presets';
 import { exercises } from '../../schema';
 import { createExerciseSchema } from '../../../../shared/schemas/exercises';
+import { createPhaseSchema, createProgramSchema } from '../../../../shared/schemas/programs';
 import { addRoutineItemSchema, createRoutineSchema } from '../../../../shared/schemas/routines';
 import { buildTimeline, estimateTimelineSec, toPlanItems } from '../../../../shared/utils/timeline';
-import { ALL_DAYS_MASK } from '../../../../shared/utils/weekday';
 import type { ExerciseParams } from '../../../../shared/types/exercises';
 
 // Như exercisesSvc.nameKey — seed so tên theo khoá này.
@@ -118,19 +118,45 @@ describe('bộ mẫu — giáo án', () => {
 		}
 	});
 
-	it('giáo án tuần: mỗi ngày đúng một buổi, đủ T2 → CN', () => {
-		let covered = 0;
-		for (const r of WEEKLY_PLAN) {
-			expect(covered & r.scheduleMask, r.name).toBe(0);
-			covered |= r.scheduleMask;
-		}
-		expect(covered).toBe(ALL_DAYS_MASK);
-		expect(WEEKLY_PLAN).toHaveLength(7);
-	});
-
-	it.each(WEEKLY_PLAN.map((r) => [r.name, r] as const))('giáo án tuần "%s" dài 30–40 phút', (_, routine) => {
+	it.each(MORNING_ROUTINES.map((r) => [r.name, r] as const))('giáo án buổi sáng "%s" dài 30–40 phút', (_, routine) => {
 		const minutes = estimateMin(routine);
 		expect(minutes).toBeGreaterThanOrEqual(30);
 		expect(minutes).toBeLessThanOrEqual(40);
+	});
+});
+
+describe('bộ mẫu — chương trình', () => {
+	const routineByName = new Map(ROUTINE_PRESETS.map((r) => [key(r.name), r]));
+
+	it('tên không trùng (không phân biệt hoa thường)', () => {
+		expect(new Set(PROGRAM_PRESETS.map((p) => key(p.name))).size).toBe(PROGRAM_PRESETS.length);
+	});
+
+	it('hợp lệ theo zod, có giai đoạn, lịch chỉ trỏ tới giáo án có trong bộ mẫu', () => {
+		for (const { phases, follow: _, ...p } of PROGRAM_PRESETS) {
+			expect(createProgramSchema.safeParse(p).error, p.name).toBeUndefined();
+			expect(phases.length, p.name).toBeGreaterThan(0);
+			for (const { days, ...phase } of phases) {
+				expect(createPhaseSchema.safeParse(phase).error, `${p.name} → ${phase.name}`).toBeUndefined();
+				for (const [weekday, names] of Object.entries(days)) {
+					expect(Number(weekday), `${p.name} → ${phase.name}`).toBeGreaterThanOrEqual(1);
+					expect(Number(weekday), `${p.name} → ${phase.name}`).toBeLessThanOrEqual(7);
+					for (const name of names) expect(routineByName.has(key(name)), `${p.name} → ${name}`).toBe(true);
+				}
+			}
+		}
+	});
+
+	it('"Giảm mỡ tại nhà": mỗi giai đoạn đúng một buổi sáng mỗi ngày, đủ T2 → CN', () => {
+		const program = PROGRAM_PRESETS.find((p) => p.goal === 'fat_loss');
+		expect(program).toBeDefined();
+		const morning = new Set(MORNING_ROUTINES.map((r) => key(r.name)));
+		for (const phase of program!.phases) {
+			for (let weekday = 1; weekday <= 7; weekday++) {
+				const names = phase.days[weekday] ?? [];
+				expect(names, `${phase.name} · thứ ${weekday}`).toHaveLength(1);
+				expect(morning.has(key(names[0]!)), `${phase.name} · ${names[0]}`).toBe(true);
+			}
+		}
 	});
 });

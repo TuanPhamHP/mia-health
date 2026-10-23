@@ -1,8 +1,6 @@
 <script setup lang="ts">
 	import type { ExerciseParams } from '#shared/types/exercises';
 	import type { CreateRoutineInput, RoutineItemDTO } from '#shared/types/routines';
-	import { describeMask } from '#shared/utils/weekday';
-	import { isoWeekday, localDateIso } from '#shared/utils/date';
 	import { coverOf } from '#shared/utils/media';
 	import { describeComponents, describeExercise } from '~/utils/labels';
 	import { formatDuration } from '~/utils/format';
@@ -13,7 +11,6 @@
 	pageTitle.value = 'Giáo án';
 
 	const routineId = Number(route.params.id);
-	const todayWeekday = isoWeekday(localDateIso());
 	const { current: routine, loading, error, get, update, remove, addItem, updateItem, removeItem, reorder } = useRoutines();
 	const { exercises, list: listExercises } = useExercises();
 
@@ -129,8 +126,23 @@
 					</div>
 				</div>
 				<div class="mt-3">
-					<p class="mb-1.5 text-[11px] text-(--ui-text-muted)">Lịch · {{ describeMask(routine.scheduleMask) }}</p>
-					<WeekdayPills :mask="routine.scheduleMask" :today="todayWeekday" />
+					<p class="mb-1.5 text-[11px] text-(--ui-text-muted)">Trong lịch chương trình</p>
+					<div v-if="routine.programs.length > 0" class="flex flex-wrap gap-1.5">
+						<UButton
+							v-for="p in routine.programs"
+							:key="p.id"
+							size="xs"
+							color="neutral"
+							variant="soft"
+							icon="i-heroicons-flag"
+							:to="`/programs/${p.id}`"
+						>
+							{{ p.name }}
+						</UButton>
+					</div>
+					<p v-else class="text-xs text-(--ui-text-dimmed)">
+						Chưa có — mở <NuxtLink to="/programs" class="text-(--ui-primary)">Chương trình</NuxtLink> để nhặt giáo án này vào một ngày.
+					</p>
 				</div>
 				<UBadge v-if="routine.isArchived" class="mt-3" color="neutral" variant="soft">Đã lưu trữ</UBadge>
 				<UButton

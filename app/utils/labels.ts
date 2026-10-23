@@ -6,7 +6,10 @@ import type {
   ExerciseParams,
   SingleMode,
 } from '#shared/types/exercises'
+import type { ProgramGoal } from '#shared/types/programs'
+import type { ProgramStatus } from '#shared/utils/program'
 import type { PlanItem, Step } from '#shared/utils/timeline'
+import { formatDate } from './format'
 
 export const CATEGORY_ORDER: ExerciseCategory[] = [
   'kegel',
@@ -151,4 +154,60 @@ export const FEELING_OPTIONS = [
 
 export function feelingEmoji(v: number | null): string {
   return FEELING_OPTIONS.find((o) => o.value === v)?.emoji ?? ''
+}
+
+// ---------------------------------------------------------------------------
+// Mục tiêu chương trình
+// ---------------------------------------------------------------------------
+
+export const GOAL_ORDER: ProgramGoal[] = ['fat_loss', 'muscle', 'health', 'rehab', 'pelvic', 'mobility', 'other']
+
+export const GOAL_LABELS: Record<ProgramGoal, string> = {
+  fat_loss: 'Giảm mỡ',
+  muscle: 'Tăng cơ',
+  health: 'Sức khoẻ chung',
+  rehab: 'Phục hồi · vật lý trị liệu',
+  pelvic: 'Sàn chậu & sinh lý',
+  mobility: 'Dẻo dai',
+  other: 'Khác',
+}
+
+/** Chọn động qua map ⇒ phải khai ở nuxt.config `icon.clientBundle`. */
+export const GOAL_ICONS: Record<ProgramGoal, string> = {
+  fat_loss: 'i-heroicons-fire',
+  muscle: 'i-heroicons-bolt',
+  health: 'i-heroicons-shield-check',
+  rehab: 'i-heroicons-lifebuoy',
+  pelvic: 'i-heroicons-heart',
+  mobility: 'i-heroicons-arrows-pointing-out',
+  other: 'i-heroicons-flag',
+}
+
+/**
+ * Mục tiêu mượn lớp màu của nhóm bài gần nghĩa nhất — không thêm màu mới vào bảng đã qua
+ * validator dataviz. Như nhóm bài: luôn đi cùng icon + tên, màu không gánh nghĩa một mình.
+ */
+export const GOAL_TONES: Record<ProgramGoal, string> = {
+  fat_loss: 'tone-cardio',
+  muscle: 'tone-strength',
+  health: 'tone-gymnastics',
+  rehab: 'tone-breathing',
+  pelvic: 'tone-kegel',
+  mobility: 'tone-stretching',
+  other: 'tone-other',
+}
+
+/** "Tuần 3/8" · "Tuần 2/26 · vòng 2" · "Lặp mỗi tuần" · "Bắt đầu 26/10/2026" · "Hoàn thành 13/12/2026" */
+export function describeProgramStatus(status: ProgramStatus): string {
+  switch (status.kind) {
+    case 'idle':
+      return 'Chưa theo'
+    case 'upcoming':
+      return `Bắt đầu ${formatDate(status.startDate)}`
+    case 'finished':
+      return `Hoàn thành ${formatDate(status.endDate)}`
+    case 'active':
+      if (status.totalWeeks === 1) return 'Lặp mỗi tuần'
+      return `Tuần ${status.week}/${status.totalWeeks}${status.cycle > 1 ? ` · vòng ${status.cycle}` : ''}`
+  }
 }

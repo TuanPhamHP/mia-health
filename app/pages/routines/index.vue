@@ -1,11 +1,9 @@
 <script setup lang="ts">
 	import type { CreateRoutineInput } from '#shared/types/routines';
-	import { isScheduledOn } from '#shared/utils/weekday';
-	import { isoWeekday, localDateIso } from '#shared/utils/date';
 	import { formatDuration } from '~/utils/format';
 
 	const pageTitle = usePageTitle();
-	pageTitle.value = 'Giáo án';
+	pageTitle.value = 'Kế hoạch';
 	useHead({ title: 'Giáo án — Mia Health' });
 
 	const toast = useToast();
@@ -14,8 +12,6 @@
 
 	const showArchived = ref(false);
 	const loaded = ref(false);
-	const today = localDateIso();
-	const todayWeekday = isoWeekday(today);
 
 	async function load() {
 		await list({ includeArchived: showArchived.value });
@@ -50,11 +46,11 @@
 			return;
 		}
 		toast.add(
-			res.exercisesCreated + res.routinesCreated === 0
-				? { title: 'Đã đủ bộ mẫu', description: 'Không có bài hay giáo án mẫu nào mới', color: 'neutral' }
+			res.exercisesCreated + res.routinesCreated + res.programsCreated === 0
+				? { title: 'Đã đủ bộ mẫu', description: 'Không có bài, giáo án hay chương trình mẫu nào mới', color: 'neutral' }
 				: {
 						title: 'Đã thêm bộ mẫu',
-						description: `${res.exercisesCreated} bài tập, ${res.routinesCreated} giáo án mới`,
+						description: `${res.programsCreated} chương trình, ${res.routinesCreated} giáo án, ${res.exercisesCreated} bài tập mới`,
 						color: 'success',
 					},
 		);
@@ -64,6 +60,8 @@
 
 <template>
 	<div class="py-4 space-y-3">
+		<PlanTabs />
+
 		<div class="flex items-center gap-2">
 			<UButton icon="i-heroicons-plus" @click="() => { sheetOpen = true }">Tạo giáo án</UButton>
 			<div class="flex-1" />
@@ -81,7 +79,7 @@
 			<div class="flex flex-col items-center gap-3 py-4 text-center">
 				<UIcon name="i-heroicons-clipboard-document-list" class="size-10 text-(--ui-text-muted)" />
 				<p class="text-sm text-(--ui-text-muted)">
-					Giáo án là danh sách bài tập theo thứ tự, kèm lịch theo thứ trong tuần. Tạo mới hoặc dùng bộ mẫu.
+					Giáo án là một buổi tập — danh sách bài theo thứ tự. Tạo mới hoặc dùng bộ mẫu, rồi nhặt vào lịch của một chương trình.
 				</p>
 				<UButton :loading="seeding" icon="i-heroicons-sparkles" @click="seed">Thêm giáo án mẫu</UButton>
 			</div>
@@ -95,7 +93,6 @@
 						<div class="flex items-start gap-2">
 							<h3 class="min-w-0 flex-1 truncate font-semibold text-(--ui-text-highlighted)">{{ r.name }}</h3>
 							<UBadge v-if="r.isArchived" color="neutral" variant="soft" size="sm">Lưu trữ</UBadge>
-							<UBadge v-else-if="isScheduledOn(r.scheduleMask, today)" color="primary" variant="soft" size="sm">Hôm nay</UBadge>
 						</div>
 						<p v-if="r.description" class="mt-0.5 line-clamp-2 text-sm text-(--ui-text-muted)">{{ r.description }}</p>
 						<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--ui-text-muted)">
@@ -104,7 +101,11 @@
 						</div>
 					</div>
 				</div>
-				<WeekdayPills :mask="r.scheduleMask" :today="todayWeekday" class="mt-3" />
+				<p class="mt-2 flex items-start gap-1.5 text-xs text-(--ui-text-dimmed)">
+					<UIcon name="i-heroicons-flag" class="mt-0.5 size-3.5 shrink-0" />
+					<span v-if="r.programs.length > 0">Trong lịch: {{ r.programs.map((p) => p.name).join(', ') }}</span>
+					<span v-else>Chưa nằm trong lịch chương trình nào — chỉ tập khi tự chọn</span>
+				</p>
 			</NuxtLink>
 			<UButton
 				v-if="r.itemCount > 0 && !r.isArchived"
@@ -120,7 +121,7 @@
 		<!-- Seed idempotent theo tên: bấm lại chỉ thêm bài / giáo án mẫu mới, không đụng cái đã có -->
 		<div v-if="loaded && routines.length > 0" class="flex justify-center pt-1">
 			<UButton :loading="seeding" variant="ghost" color="neutral" size="sm" icon="i-heroicons-sparkles" @click="seed">
-				Bổ sung bài & giáo án mẫu còn thiếu
+				Bổ sung mẫu còn thiếu
 			</UButton>
 		</div>
 

@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { exercises, routineItems, routines } from '../database/schema';
+import { exercises, programPhases, programSlots, programs, routineItems, routines } from '../database/schema';
 import type { NewRoutine, NewRoutineItem } from '../database/schema';
 
 // --- Routines ---
@@ -10,6 +10,25 @@ export function listRoutines(filter: { includeArchived?: boolean }) {
 		.from(routines)
 		.where(filter.includeArchived ? undefined : eq(routines.isArchived, false))
 		.orderBy(asc(routines.sortOrder), asc(routines.id));
+}
+
+export async function listRoutinesByIds(ids: number[]) {
+	if (ids.length === 0) return [];
+	const db = useDB();
+	const parts = await Promise.all(
+		chunk(ids, D1_MAX_PARAMS - 10).map((part) => db.select().from(routines).where(inArray(routines.id, part))),
+	);
+	return parts.flat();
+}
+
+/** Cặp (giáo án, chương trình) khác nhau — chương trình nào có lịch dùng giáo án nào. */
+export function listProgramUsage() {
+	return useDB()
+		.selectDistinct({ routineId: programSlots.routineId, id: programs.id, name: programs.name })
+		.from(programSlots)
+		.innerJoin(programPhases, eq(programPhases.id, programSlots.phaseId))
+		.innerJoin(programs, eq(programs.id, programPhases.programId))
+		.orderBy(asc(programs.sortOrder), asc(programs.id));
 }
 
 export async function getRoutineById(id: number) {

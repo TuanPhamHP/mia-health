@@ -23,7 +23,6 @@ export interface RoutineDTO {
 	id: number;
 	name: string;
 	description: string | null;
-	scheduleMask: number;
 	prepSec: number;
 	sortOrder: number;
 	isArchived: boolean;
@@ -45,6 +44,8 @@ export interface RoutineSummaryDTO extends RoutineDTO {
 	estimatedSec: number;
 	/** Tối đa 4 bài đầu — để vẽ ô ảnh xem trước. */
 	previews: ExercisePreviewDTO[];
+	/** Chương trình có lịch dùng giáo án này (lịch nằm ở chương trình, không ở giáo án). */
+	programs: { id: number; name: string }[];
 }
 
 export interface RoutineItemExerciseDTO {
