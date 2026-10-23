@@ -37,6 +37,34 @@ export async function createRoutine(data: Omit<NewRoutine, 'id' | 'createdAt' | 
 	return saved;
 }
 
+/**
+ * Tạo nhiều giáo án kèm item trong MỘT batch (transaction ⇒ nguyên tử). Item trỏ giáo án qua
+ * subquery theo tên (tên unique, service đã trim) — trong cùng batch chưa có id giáo án.
+ */
+export async function createRoutines(
+	list: {
+		data: Omit<NewRoutine, 'id' | 'createdAt' | 'updatedAt'>;
+		items: Omit<NewRoutineItem, 'id' | 'routineId' | 'position' | 'createdAt' | 'updatedAt'>[];
+	}[],
+) {
+	const db = useDB();
+	// 6 cột bind/giáo án ⇒ 16 giáo án mỗi câu; item 9 cột bind (routine_id qua subquery 1 tham số) ⇒ 11.
+	const routineInserts = chunk(
+		list.map((r) => r.data),
+		Math.floor(D1_MAX_PARAMS / 6),
+	).map((part) => db.insert(routines).values(part));
+	const itemRows = list.flatMap(({ data, items }) =>
+		items.map((it, position) => ({
+			...it,
+			routineId: sql<number>`(SELECT ${routines.id} FROM ${routines} WHERE ${routines.name} = ${data.name})`,
+			position,
+		})),
+	);
+	const itemInserts = chunk(itemRows, Math.floor(D1_MAX_PARAMS / 9)).map((part) => db.insert(routineItems).values(part));
+	const [first, ...rest] = [...routineInserts, ...itemInserts];
+	if (first) await db.batch([first, ...rest]);
+}
+
 export async function updateRoutine(id: number, data: Partial<Omit<NewRoutine, 'id' | 'createdAt'>>) {
 	await useDB()
 		.update(routines)

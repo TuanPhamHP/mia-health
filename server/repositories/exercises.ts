@@ -154,6 +154,37 @@ export async function createExercise(
 	return saved;
 }
 
+// Subquery id theo tên (tên unique, service đã trim): trong cùng batch chưa có id bài vừa INSERT.
+function idByName(name: string) {
+	return sql<number>`(SELECT ${exercises.id} FROM ${exercises} WHERE ${exercises.name} = ${name})`;
+}
+
+// 12 cột bind/bài (id, created_at, updated_at không bind) ⇒ tối đa 8 bài mỗi câu INSERT.
+const EXERCISE_BIND_COLUMNS = 12;
+
+/**
+ * Tạo nhiều bài trong MỘT batch — D1 batch là transaction nên nguyên tử, không cần bù trừ
+ * như createExercise. Bài con trỏ bài kết hợp qua subquery theo tên.
+ */
+export async function createExercises(
+	items: { data: Omit<NewExercise, 'id' | 'createdAt' | 'updatedAt'>; components: ComponentData[] }[],
+) {
+	const db = useDB();
+	const exerciseInserts = chunk(
+		items.map((it) => it.data),
+		Math.floor(D1_MAX_PARAMS / EXERCISE_BIND_COLUMNS),
+	).map((part) => db.insert(exercises).values(part));
+	// Subquery bind 1 tham số (tên) thay cho combo_id ⇒ vẫn 9 cột bind/bài con.
+	const componentRows = items.flatMap(({ data, components }) =>
+		components.map((c, position) => ({ ...c, comboId: idByName(data.name), position })),
+	);
+	const componentInserts = chunk(componentRows, Math.floor(D1_MAX_PARAMS / 9)).map((part) =>
+		db.insert(exerciseComponents).values(part),
+	);
+	const [first, ...rest] = [...exerciseInserts, ...componentInserts];
+	if (first) await db.batch([first, ...rest]);
+}
+
 /** `components` có mặt ⇒ thay toàn bộ danh sách bài con, cùng batch với UPDATE (nguyên tử). */
 export async function updateExercise(
 	id: number,

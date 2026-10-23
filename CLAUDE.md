@@ -83,6 +83,7 @@ app/                        # UI (pages, components, composables)
 ## 5. Pattern D1 bắt buộc
 
 - **Không dùng `.returning()`** cho DML — D1 đôi khi throw dù row đã commit. INSERT → `getLastRowId(await db.insert(...).run())` → SELECT theo id.
+- **Trần 50 query D1 mỗi request ở gói Workers Free** (Paid: 1000). Local (miniflare) KHÔNG chặn nên không lộ khi dev. Thao tác ghi hàng loạt (seed bộ mẫu) không được lặp `addExercise` / `addItem` — mỗi lần tốn 6–10 query; dùng bản theo lô `addExercises` / `addRoutines` (một `db.batch`, khoá ngoại trỏ qua subquery theo tên vì chưa có id).
 - **Trần 100 bound parameter mỗi câu lệnh.** Multi-row INSERT và `inArray(...)` dài phải cắt bằng `chunk()` (xem `createSessionWithEntries`, `listEntries`). 11 cột/entry ⇒ tối đa 9 entry/câu.
 - **Không có transaction tương tác.** Ghi nhiều câu cần nguyên tử → `db.batch([...])`. Cần id cha trước (session → entries) thì ghi cha, batch con, batch lỗi ⇒ xoá cha (bù trừ).
 - So tên không phân biệt hoa thường làm ở **JS** (`toLocaleLowerCase('vi')`), KHÔNG dùng `lower()` của SQLite — nó chỉ hạ chữ ASCII, "Đ" lọt qua.

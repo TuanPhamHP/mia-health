@@ -49,7 +49,15 @@
 			toast.add({ title: 'Lỗi', description: seedError.value ?? undefined, color: 'error' });
 			return;
 		}
-		toast.add({ title: 'Đã thêm bộ mẫu', description: `${res.routinesCreated} giáo án mới`, color: 'success' });
+		toast.add(
+			res.exercisesCreated + res.routinesCreated === 0
+				? { title: 'Đã đủ bộ mẫu', description: 'Không có bài hay giáo án mẫu nào mới', color: 'neutral' }
+				: {
+						title: 'Đã thêm bộ mẫu',
+						description: `${res.exercisesCreated} bài tập, ${res.routinesCreated} giáo án mới`,
+						color: 'success',
+					},
+		);
 		await load();
 	}
 </script>
@@ -108,6 +116,13 @@
 				Bắt đầu
 			</UButton>
 		</UCard>
+
+		<!-- Seed idempotent theo tên: bấm lại chỉ thêm bài / giáo án mẫu mới, không đụng cái đã có -->
+		<div v-if="loaded && routines.length > 0" class="flex justify-center pt-1">
+			<UButton :loading="seeding" variant="ghost" color="neutral" size="sm" icon="i-heroicons-sparkles" @click="seed">
+				Bổ sung bài & giáo án mẫu còn thiếu
+			</UButton>
+		</div>
 
 		<RoutineFormSheet v-model:open="sheetOpen" :routine="null" :saving="saving" @save="onCreate" />
 	</div>

@@ -130,7 +130,7 @@
 				</span>
 				<p class="font-semibold text-(--ui-text-highlighted)">Chào mừng đến Mia Health</p>
 				<p class="text-sm text-(--ui-text-muted)">
-					Thêm bộ mẫu gồm 15 bài (Kegel, core, thể dục dụng cụ, giãn cơ) và 3 giáo án có lịch sẵn — sửa lại theo ý bạn sau.
+					Thêm bộ mẫu gồm 62 bài (Kegel, tạ ấm, tạ tay, máy chạy bộ, core, giãn cơ) và 10 giáo án có lịch sẵn — trong đó có lịch tập sáng T2 → CN 30–40 phút. Sửa lại theo ý bạn sau.
 				</p>
 				<UButton :loading="seeding" icon="i-heroicons-sparkles" @click="seed">Thêm bộ mẫu</UButton>
 				<UButton variant="ghost" color="neutral" size="sm" to="/routines">Hoặc tự tạo giáo án</UButton>

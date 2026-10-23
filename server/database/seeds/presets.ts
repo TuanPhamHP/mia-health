@@ -1,13 +1,28 @@
 import { daysToMask } from '../../../shared/utils/weekday';
 import type { CreateExerciseData } from '../../services/exercises';
 
-// Bộ bài tập + giáo án mẫu cho lần chạy đầu. Seed idempotent THEO TÊN
-// (POST /api/presets/seed): bài/giáo án trùng tên đã có thì bỏ qua, không ghi đè
-// thông số người dùng đã chỉnh.
+// Bộ bài tập + giáo án mẫu. Seed idempotent THEO TÊN (POST /api/presets/seed): bài/giáo án
+// trùng tên đã có thì bỏ qua, không ghi đè thông số người dùng đã chỉnh — nên thêm bài mới
+// vào đây rồi bấm seed lại là đủ. Tính nhất quán (tên tham chiếu, giới hạn thông số, thời
+// lượng giáo án tuần) có test: server/database/seeds/__tests__/presets.test.ts.
+
+type PresetParams = Pick<CreateExerciseData, 'sets' | 'reps' | 'holdSec' | 'relaxSec' | 'durationSec' | 'restSec'>;
+
+/** Trỏ tới bài bằng TÊN (id chỉ có sau khi seed); thông số bỏ trống ⇒ copy từ bài như thường. */
+export interface PresetRef extends PresetParams {
+	name: string;
+}
+
+/** Bài kết hợp trỏ bài con bằng tên — bài con phải là bài đơn có trong danh sách. */
+export type ExercisePreset = Omit<CreateExerciseData, 'components'> & { components?: PresetRef[] };
 
 const KEGEL_NOTE = 'Nếu thấy đau hoặc có vấn đề về sàn chậu, hỏi bác sĩ / chuyên viên vật lý trị liệu trước khi tập.';
 
-export const EXERCISE_PRESETS: CreateExerciseData[] = [
+// Nhịp tim tối đa ước theo Tanaka: 208 − 0,7 × tuổi (30 tuổi ≈ 187).
+const HR_NOTE = 'Nhịp tim tối đa ước bằng 208 − 0,7 × tuổi';
+
+// Bài đơn có sẵn từ bộ mẫu đầu tiên.
+const BASE_EXERCISES: ExercisePreset[] = [
 	{
 		name: 'Kegel giữ lâu',
 		category: 'kegel',
@@ -151,34 +166,632 @@ export const EXERCISE_PRESETS: CreateExerciseData[] = [
 	},
 ];
 
+// Bài cho phòng tập tại nhà: tạ ấm, tạ tay lắp ghép, ghế, máy chạy bộ, thảm.
+const HOME_GYM_EXERCISES: ExercisePreset[] = [
+	// --- Máy chạy bộ ---
+	{
+		name: 'Đi bộ nhanh khởi động',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 1,
+		durationSec: 300,
+		restSec: 0,
+		instructions: 'Trên máy chạy bộ: 1–2 phút đầu 4–5 km/h, rồi tăng dần lên đi nhanh 5,5–6,5 km/h, dốc 1–3%. Vung tay tự nhiên, không bám tay vịn. Hết bài người phải ấm, thở nhanh hơn bình thường.',
+	},
+	{
+		name: 'Đi bộ leo dốc (Zone 2)',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 1,
+		durationSec: 1200,
+		restSec: 0,
+		instructions: `Dốc 8–12%, tốc độ 4,5–5,5 km/h, đi đều. Cường độ Zone 2: thở nhanh nhưng vẫn nói trọn câu được — khoảng 60–70% nhịp tim tối đa (30 tuổi ≈ 115–130 nhịp/phút; ${HR_NOTE}). Không bám tay vịn — bám vào là mất phần lớn tác dụng. Đau gối / cổ chân thì giảm dốc, tăng tốc.`,
+	},
+	{
+		name: 'Chạy 4×4 (Norwegian)',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 4,
+		durationSec: 240,
+		restSec: 180,
+		instructions: `4 hiệp × 4 phút chạy (hoặc leo dốc thật nhanh) ở 85–95% nhịp tim tối đa (30 tuổi ≈ 160–175 nhịp/phút: thở dốc, chỉ nói được vài từ; ${HR_NOTE}). Phần NGHỈ 3 phút = đi bộ chậm 4–5 km/h ngay trên máy. Nhịp tim cần 1–2 phút mới lên — đừng bung hết từ phút đầu, hiệp cuối vẫn phải giữ được tốc độ. Bấm đổi tốc độ vài giây trước khi đổi pha; không nhảy lên / xuống băng chuyền đang chạy.`,
+	},
+	{
+		name: 'Chạy biến tốc 30/60',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 8,
+		durationSec: 30,
+		restSec: 60,
+		instructions: 'Thay cho 4×4 khi muốn đổi bài. 30 giây chạy nhanh (~8/10 sức) — 60 giây đi bộ chậm trên máy (phần nghỉ). Máy cần vài giây để đổi tốc độ: bấm tăng tốc ở ~5 giây cuối phần nghỉ. Không nhảy lên / xuống băng chuyền đang chạy, không bám tay vịn khi chạy nhanh.',
+	},
+
+	// --- Tạ ấm / tạ tay: đốt mỡ, chạy theo đồng hồ ---
+	{
+		name: 'Swing tạ ấm',
+		category: 'strength',
+		mode: 'duration',
+		sets: 6,
+		durationSec: 30,
+		restSec: 30,
+		instructions: 'Chân rộng hơn vai, tạ đặt trước mặt ~30 cm. Gập hông — đẩy mông ra sau, lưng thẳng — kéo tạ ra sau giữa hai đùi, rồi BẬT HÔNG + siết mông để tạ bay lên ngang ngực. Tay chỉ như sợi dây, không nâng tạ bằng vai; đây là gập hông, không phải squat. Thở ra mạnh khi bật hông. 30 giây ≈ 12–15 lần. Gợi ý tạ: 12–16 kg. Đau lưng dưới thì dừng, xem lại kỹ thuật.',
+	},
+	{
+		name: 'Thruster tạ tay',
+		category: 'strength',
+		mode: 'duration',
+		sets: 3,
+		durationSec: 40,
+		restSec: 20,
+		instructions: 'Hai tạ tay ngang vai. Squat xuống tới khi đùi song song sàn, đứng lên dứt khoát và dùng đà đó đẩy tạ thẳng lên đầu — một động tác liền. Hạ tạ về vai rồi squat tiếp. Kỹ thuật xấu đi thì chậm lại, đừng dừng hẳn.',
+	},
+	{
+		name: 'Kéo cao tạ ấm (High pull)',
+		category: 'strength',
+		mode: 'duration',
+		sets: 3,
+		durationSec: 40,
+		restSec: 20,
+		instructions: 'Đứng chân rộng kiểu sumo, hai tay nắm quai tạ ấm. Gập hông hạ tạ xuống giữa hai chân, bật hông đứng lên và kéo tạ thẳng lên ngang ngực, khuỷu tay cao hơn cổ tay. Lực đến từ hông, tay chỉ dẫn đường. Hạ có kiểm soát.',
+	},
+	{
+		name: 'Leo núi (Mountain climber)',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 3,
+		durationSec: 40,
+		restSec: 20,
+		instructions: 'Tư thế hít đất, tay dưới vai. Lần lượt kéo gối về phía ngực thật nhanh, hông thấp ngang vai, không nhổm mông. Mỏi thì giảm tốc độ nhưng giữ tư thế.',
+	},
+	{
+		name: 'Burpee',
+		category: 'cardio',
+		mode: 'duration',
+		sets: 3,
+		durationSec: 40,
+		restSec: 20,
+		instructions: 'Ngồi xuống chống tay, bật hai chân ra sau thành tư thế plank, thu chân về rồi bật nhảy lên vỗ tay trên đầu. Tiếp đất nhẹ bằng mũi chân. Ngại ồn tầng dưới thì bỏ bật nhảy, đứng lên kiễng chân.',
+	},
+	{
+		name: 'Xách tạ đi bộ (Farmer carry)',
+		category: 'strength',
+		mode: 'duration',
+		sets: 3,
+		durationSec: 40,
+		restSec: 30,
+		instructions: 'Hai tay xách hai tạ tay (hoặc tạ tay + tạ ấm) nặng nhất mà vẫn đứng thẳng được. Vai ép xuống, ngực mở, siết bụng — đi bước ngắn quanh phòng, không lắc người. Luyện tay nắm, vai, core. Khó hơn: xách một bên (suitcase carry), đổi tay mỗi set.',
+	},
+
+	// --- Thân dưới ---
+	{
+		name: 'Goblet squat tạ ấm',
+		category: 'strength',
+		mode: 'reps',
+		sets: 4,
+		reps: 10,
+		restSec: 60,
+		instructions: 'Ôm tạ ấm sát ngực, hai tay cầm hai bên quai, khuỷu tay hướng xuống. Ngồi sâu xuống giữa hai gót, ngực mở, gối đẩy ra theo mũi chân, gót không nhấc. Đẩy cả bàn chân đứng lên. Tạ nhẹ quá thì hạ chậm 3 giây, dừng 1 giây ở đáy.',
+	},
+	{
+		name: 'Romanian deadlift tạ tay',
+		category: 'strength',
+		mode: 'reps',
+		sets: 4,
+		reps: 10,
+		restSec: 60,
+		instructions: 'Hai tay cầm tạ trước đùi, gối hơi chùng và giữ nguyên góc đó. Đẩy hông ra sau, tạ trượt sát đùi xuống quá gối tới khi căng đùi sau — lưng luôn thẳng. Siết mông đẩy hông về trước để đứng lên. Đừng cong lưng để đưa tạ xuống thấp hơn.',
+	},
+	{
+		name: 'Bulgarian split squat',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 8,
+		restSec: 60,
+		instructions: 'Mu bàn chân sau gác lên ghế, chân trước cách ghế khoảng một bước dài, hai tay cầm tạ tay. Hạ thẳng người tới khi đùi trước song song sàn, đẩy gót chân trước đứng lên. 8 lần MỖI CHÂN = 1 set (hết chân này mới đổi chân). Mất thăng bằng thì tập không tạ trước.',
+	},
+	{
+		name: 'Hip thrust trên ghế',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 12,
+		restSec: 60,
+		instructions: 'Bả vai tựa mép ghế, bàn chân rộng bằng hông, tạ tay hoặc tạ ấm đặt ngang hông (lót khăn). Đẩy hông lên tới khi thân song song sàn, cằm hơi cúi, siết mông giữ 1 giây ở đỉnh — siết thêm sàn chậu. Hạ có kiểm soát, không ưỡn thắt lưng.',
+	},
+	{
+		name: 'Lunge lùi tạ tay',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 10,
+		restSec: 60,
+		instructions: 'Hai tay cầm tạ, đứng thẳng. Bước lùi một chân, hạ tới khi gối sau gần chạm sàn, thân thẳng, gối trước không đổ vào trong. Đạp gót chân trước về vị trí đứng. Luân phiên hai chân, 10 lần MỖI CHÂN. Lùi đỡ tải gối hơn lunge tiến.',
+	},
+	{
+		name: 'Sumo deadlift tạ ấm',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 12,
+		restSec: 60,
+		instructions: 'Chân rộng hơn vai, mũi chân mở ~30°, tạ ấm giữa hai bàn chân. Gập hông, lưng thẳng, hai tay nắm quai. Đẩy sàn đứng thẳng, siết mông ở đỉnh, rồi hạ tạ theo đường cũ. Tải nặng hơn swing được — dùng tạ nặng nhất.',
+	},
+
+	// --- Thân trên ---
+	{
+		name: 'Đẩy ngực tạ tay trên ghế',
+		category: 'strength',
+		mode: 'reps',
+		sets: 4,
+		reps: 10,
+		restSec: 75,
+		instructions: 'Nằm ghế phẳng, bàn chân bám sàn, ép hai bả vai xuống ghế. Hạ tạ xuống hai bên ngực, khuỷu tay khoảng 45° so với thân, rồi đẩy thẳng lên. Chọn mức tạ để 2 lần cuối nặng nhưng vẫn đúng kỹ thuật. Ghế chỉnh dốc được thì xen kẽ dốc 30°.',
+	},
+	{
+		name: 'Chèo tạ tay một tay',
+		category: 'strength',
+		mode: 'reps',
+		sets: 4,
+		reps: 10,
+		restSec: 60,
+		instructions: 'Một gối + một tay chống trên ghế, lưng phẳng song song sàn. Tay kia kéo tạ về phía hông (không phải về nách), ép bả vai về sau, hạ chậm tới khi tay duỗi hết. 10 lần MỖI TAY = 1 set.',
+	},
+	{
+		name: 'Đẩy vai tạ tay',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 10,
+		restSec: 60,
+		instructions: 'Đứng (hoặc ngồi ghế dựng thẳng), tạ ngang vai. Siết mông và bụng, đẩy tạ thẳng lên trên đầu, không ưỡn lưng. Hạ về ngang tai.',
+	},
+	{
+		name: 'Chèo tạ hai tay gập người',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 12,
+		restSec: 60,
+		instructions: 'Hai tay cầm tạ, gối chùng, gập hông cho thân nghiêng ~45° và giữ lưng thẳng. Kéo hai tạ về phía hông, ép bả vai, dừng một nhịp rồi hạ chậm. Mỏi lưng dưới thì tựa ngực lên ghế dốc.',
+	},
+	{
+		name: 'Bay vai sau (Reverse fly)',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 15,
+		restSec: 45,
+		instructions: 'Gập người ~45° (hoặc nằm sấp trên ghế dốc), tạ nhẹ, khuỷu tay hơi cong. Dang hai tay sang ngang như vỗ cánh, ép hai bả vai, hạ chậm. Cho vai sau + lưng trên — chữa dáng vai tròn do ngồi máy tính.',
+	},
+	{
+		name: 'Chống tay sau ghế (Bench dip)',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 12,
+		restSec: 45,
+		instructions: 'Hai tay chống mép ghế sau lưng, ngón tay hướng về trước; co gối (dễ) hoặc duỗi chân (khó). Hạ người tới khi khuỷu tay gập ~90°, vai không nhô lên tai, rồi đẩy lên. Đau vai thì giảm độ sâu hoặc thay bằng hít đất tay hẹp.',
+	},
+	{
+		name: 'Cuốn tạ tay (Bicep curl)',
+		category: 'strength',
+		mode: 'reps',
+		sets: 3,
+		reps: 12,
+		restSec: 45,
+		instructions: 'Đứng thẳng, khuỷu tay ép sát hông. Cuốn tạ lên vai, lòng bàn tay hướng lên, hạ chậm 2–3 giây. Không đánh lưng lấy đà.',
+	},
+
+	// --- Core ---
+	{
+		name: 'Dead bug',
+		category: 'gymnastics',
+		mode: 'reps',
+		sets: 3,
+		reps: 10,
+		restSec: 30,
+		instructions: 'Nằm ngửa, hai tay duỗi thẳng lên trần, hông và gối gập 90°. Ép thắt lưng sát thảm, thở ra và duỗi tay trái + chân phải xuống gần sàn, về lại, đổi bên. 10 lần MỖI BÊN. Thắt lưng nhấc khỏi thảm là duỗi quá xa.',
+	},
+	{
+		name: 'Plank nghiêng (Side plank)',
+		category: 'gymnastics',
+		mode: 'duration',
+		sets: 4,
+		durationSec: 30,
+		restSec: 15,
+		instructions: 'Nằm nghiêng, chống cẳng tay (khuỷu dưới vai), hai chân chồng lên nhau. Nâng hông cho thân thẳng từ đầu tới gót, không đổ hông về trước / sau. Đổi bên sau mỗi set. Khó quá thì chống gối.',
+	},
+
+	// --- Khởi động / giãn cơ ---
+	{
+		name: 'Mèo – bò (Cat-cow)',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 1,
+		durationSec: 60,
+		restSec: 0,
+		instructions: 'Quỳ bốn điểm, tay dưới vai, gối dưới hông. Hít vào: võng lưng, ngẩng đầu, thả lỏng bụng và sàn chậu. Thở ra: cong lưng tròn, cúi đầu, nâng nhẹ sàn chậu. Làm chậm theo hơi thở.',
+	},
+	{
+		name: "World's greatest stretch",
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 30,
+		restSec: 5,
+		instructions: 'Bước dài chân phải ra trước, tay trái chống sàn, hạ khuỷu tay phải về phía mắt cá chân phải, rồi xoay ngực mở tay phải lên trần. Mở hông, đùi sau và lưng ngực trong một bài. Đổi bên sau mỗi set.',
+	},
+	{
+		name: 'Halo tạ ấm',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 30,
+		restSec: 10,
+		instructions: 'Hai tay cầm tạ ấm úp ngược (đáy lên) trước ngực. Vòng tạ quanh đầu sát gáy, siết bụng và mông để thân không lắc. Đổi chiều sau mỗi set. Khởi động khớp vai trước khi đẩy tạ.',
+	},
+	{
+		name: 'Giữ squat sâu',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 40,
+		restSec: 10,
+		instructions: 'Ngồi xổm sâu, gót chạm sàn (ôm tạ ấm nhẹ phía trước làm đối trọng nếu cần), khuỷu tay đẩy gối ra, ngực mở. Thở bụng chậm, thả lỏng sàn chậu.',
+	},
+	{
+		name: 'Giãn cơ gập hông (quỳ một gối)',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 40,
+		restSec: 5,
+		instructions: 'Quỳ một gối trên thảm, chân kia bước ra trước. Siết mông bên chân quỳ, đẩy hông nhẹ về trước tới khi căng mặt trước hông / đùi, không ưỡn lưng. Ngồi nhiều làm nhóm cơ này co ngắn, kéo lệch khung chậu. Đổi bên sau mỗi set.',
+	},
+	{
+		name: 'Giãn đùi sau trên ghế',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 40,
+		restSec: 5,
+		instructions: 'Đứng, gác một gót chân lên ghế, chân thẳng, mũi chân hướng lên. Giữ lưng thẳng, gập hông đưa người về trước tới khi căng đùi sau. Đổi bên sau mỗi set.',
+	},
+	{
+		name: 'Xoay cột sống nằm',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 2,
+		durationSec: 30,
+		restSec: 5,
+		instructions: 'Nằm ngửa, dang tay chữ T. Co gối phải, đổ gối sang trái xuống sàn, đầu quay sang phải, hai vai vẫn sát thảm. Thở sâu. Đổi bên sau mỗi set.',
+	},
+	{
+		name: 'Em bé vui vẻ (Happy baby)',
+		category: 'stretching',
+		mode: 'duration',
+		sets: 1,
+		durationSec: 60,
+		restSec: 0,
+		instructions: 'Nằm ngửa, co gối về phía nách, hai tay nắm mép ngoài bàn chân, kéo gối nhẹ xuống. Thở bụng sâu, để sàn chậu giãn ra. Thả lỏng quan trọng như siết: sàn chậu lúc nào cũng căng cũng gây rối loạn.',
+	},
+
+	// --- Sàn chậu (phác đồ Dorey: siết tối đa ở 3 tư thế) ---
+	{
+		name: 'Kegel tối đa — đứng',
+		category: 'kegel',
+		mode: 'hold',
+		sets: 1,
+		reps: 3,
+		holdSec: 10,
+		relaxSec: 10,
+		restSec: 0,
+		instructions: 'Đứng hai chân rộng bằng hông. Siết sàn chậu MẠNH NHẤT có thể như nín tiểu và nín xì hơi cùng lúc — soi gương sẽ thấy gốc dương vật nhích về phía bụng, tinh hoàn nâng lên. Giữ, rồi thả lỏng hoàn toàn. Không nín thở, không hóp bụng, không siết mông. Chưa giữ nổi 10 giây thì giữ được bao lâu tính bấy lâu, tăng dần.',
+	},
+	{
+		name: 'Kegel tối đa — ngồi',
+		category: 'kegel',
+		mode: 'hold',
+		sets: 1,
+		reps: 3,
+		holdSec: 10,
+		relaxSec: 10,
+		restSec: 0,
+		instructions: 'Ngồi ghế, hai gối mở rộng, lưng thẳng. Siết sàn chậu như đang nhấc nó lên khỏi mặt ghế, nhưng mông không rời ghế. Giữ thật mạnh, rồi thả lỏng hoàn toàn. Không nín thở, không hóp bụng, không siết mông.',
+	},
+	{
+		name: 'Kegel tối đa — nằm',
+		category: 'kegel',
+		mode: 'hold',
+		sets: 1,
+		reps: 3,
+		holdSec: 10,
+		relaxSec: 10,
+		restSec: 0,
+		instructions: 'Nằm ngửa trên thảm, gối co và mở rộng. Siết sàn chậu mạnh nhất có thể, giữ, rồi thả lỏng hoàn toàn. Không hóp bụng, không siết mông, thở đều.',
+	},
+	{
+		name: 'Cầu mông giữ + siết sàn chậu',
+		category: 'kegel',
+		mode: 'hold',
+		sets: 2,
+		reps: 8,
+		holdSec: 5,
+		relaxSec: 3,
+		restSec: 30,
+		instructions: `Nằm ngửa, gối co. Nhịp GIỮ: đẩy hông lên cầu mông và siết sàn chậu cùng lúc, giữ ở đỉnh. Nhịp THẢ: hạ hông xuống, thả lỏng cả mông và sàn chậu. Thở ra khi đẩy lên. Tập cho sàn chậu phối hợp với cơ mông — gần với vận động thật hơn Kegel nằm yên. ${KEGEL_NOTE}`,
+	},
+];
+
+// Bài kết hợp — để CUỐI: bài con phải có sẵn trước (seed tạo bài đơn trước, bài kết hợp sau).
+// Luân phiên: `sets` = số vòng, `restSec` = nghỉ giữa vòng; restSec của bài con = chuyển bài.
+const COMBO_EXERCISES: ExercisePreset[] = [
+	{
+		name: 'Khởi động toàn thân',
+		category: 'stretching',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 2,
+		restSec: 5,
+		components: [
+			{ name: 'Mèo – bò (Cat-cow)', durationSec: 30, restSec: 5 },
+			{ name: "World's greatest stretch", durationSec: 30, restSec: 5 },
+			{ name: 'Halo tạ ấm', durationSec: 30, restSec: 5 },
+			{ name: 'Giữ squat sâu', durationSec: 30 },
+		],
+		instructions: 'Chạy liền 4 động tác, 2 vòng: vòng 1 làm bên trái / chiều xuôi, vòng 2 bên phải / chiều ngược. Hết bài người ấm, hông – vai – lưng đã mở.',
+	},
+	{
+		name: 'Giãn cơ thả lỏng',
+		category: 'stretching',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 2,
+		restSec: 5,
+		components: [
+			{ name: 'Giãn cơ gập hông (quỳ một gối)', durationSec: 30, restSec: 5 },
+			{ name: 'Giãn đùi sau trên ghế', durationSec: 30, restSec: 5 },
+			{ name: 'Xoay cột sống nằm', durationSec: 30, restSec: 5 },
+			{ name: 'Em bé vui vẻ (Happy baby)', durationSec: 30 },
+		],
+		instructions: '4 động tác giãn, 2 vòng: vòng 1 bên trái, vòng 2 bên phải. Thở chậm, thở ra dài hơn hít vào để nhịp tim hạ.',
+	},
+	{
+		name: 'Kegel 3 tư thế (Dorey)',
+		category: 'kegel',
+		mode: 'combo',
+		comboStyle: 'sequence',
+		sets: 1,
+		restSec: 0,
+		components: [{ name: 'Kegel tối đa — đứng' }, { name: 'Kegel tối đa — ngồi' }, { name: 'Kegel tối đa — nằm' }],
+		instructions: `Phác đồ trong thử nghiệm ngẫu nhiên của Dorey và cộng sự (British Journal of General Practice, 2004; 55 nam giới rối loạn cương): mỗi tư thế đứng → ngồi → nằm siết tối đa 3 lần, làm sáng và tối mỗi ngày. Sau 6 tháng 40% về chức năng cương bình thường, 35% cải thiện. Ngoài giờ tập: siết nhẹ ~50% khi đi bộ, siết mạnh sau khi đi tiểu (chống rỉ giọt). ${KEGEL_NOTE}`,
+	},
+	{
+		name: 'Mạch đốt mỡ tạ ấm',
+		category: 'cardio',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 4,
+		restSec: 60,
+		components: [
+			{ name: 'Swing tạ ấm', durationSec: 40, restSec: 20 },
+			{ name: 'Thruster tạ tay' },
+			{ name: 'Leo núi (Mountain climber)' },
+			{ name: 'Kéo cao tạ ấm (High pull)' },
+			{ name: 'Burpee' },
+		],
+		instructions: 'Luân phiên 5 bài, mỗi bài 40 giây làm – 20 giây chuyển, 4 vòng, nghỉ 1 phút giữa vòng. Mức 8/10 sức: thở dốc nhưng kỹ thuật vẫn sạch — mệt thì chậm lại chứ không bỏ. Một tạ ấm + một cặp tạ tay vừa sức.',
+	},
+	{
+		name: 'Mạch core',
+		category: 'gymnastics',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 3,
+		restSec: 30,
+		components: [
+			{ name: 'Dead bug', restSec: 15 },
+			{ name: 'Plank', durationSec: 40, restSec: 15 },
+			{ name: 'Hollow hold' },
+		],
+		instructions: 'Luân phiên dead bug → plank → hollow hold. Ép thắt lưng xuống sàn ở cả 3 bài và thở đều — nín thở là đang gồng sai.',
+	},
+	{
+		name: 'Superset ngực – lưng',
+		category: 'strength',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 4,
+		restSec: 75,
+		components: [{ name: 'Đẩy ngực tạ tay trên ghế', restSec: 15 }, { name: 'Chèo tạ tay một tay' }],
+		instructions: 'Đẩy ngực xong chuyển ngay sang chèo tạ, hết vòng mới nghỉ. Đẩy – kéo xen kẽ: nhóm này nghỉ trong lúc nhóm kia làm, được nhiều khối lượng hơn trong cùng thời gian.',
+	},
+	{
+		name: 'Superset vai – lưng trên',
+		category: 'strength',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 3,
+		restSec: 60,
+		components: [{ name: 'Đẩy vai tạ tay', restSec: 15 }, { name: 'Bay vai sau (Reverse fly)' }],
+		instructions: 'Đẩy vai rồi chuyển ngay sang bay vai sau, hết vòng mới nghỉ. Cân bằng vai trước – vai sau, giữ dáng thẳng.',
+	},
+	{
+		name: 'Superset tay sau – tay trước',
+		category: 'strength',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 3,
+		restSec: 45,
+		components: [{ name: 'Chống tay sau ghế (Bench dip)', restSec: 15 }, { name: 'Cuốn tạ tay (Bicep curl)' }],
+		instructions: 'Chống tay sau ghế rồi chuyển ngay sang cuốn tạ, hết vòng mới nghỉ.',
+	},
+	{
+		name: 'Superset deadlift sumo – hít đất',
+		category: 'strength',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 3,
+		restSec: 60,
+		components: [{ name: 'Sumo deadlift tạ ấm', restSec: 15 }, { name: 'Hít đất', reps: 12 }],
+		instructions: 'Deadlift sumo rồi chuyển ngay sang hít đất, hết vòng mới nghỉ. Thân dưới kéo + thân trên đẩy.',
+	},
+	{
+		name: 'Superset lunge – chèo tạ',
+		category: 'strength',
+		mode: 'combo',
+		comboStyle: 'circuit',
+		sets: 3,
+		restSec: 60,
+		components: [{ name: 'Lunge lùi tạ tay', restSec: 15 }, { name: 'Chèo tạ hai tay gập người' }],
+		instructions: 'Lunge lùi rồi chuyển ngay sang chèo hai tay, hết vòng mới nghỉ.',
+	},
+];
+
+export const EXERCISE_PRESETS: ExercisePreset[] = [...BASE_EXERCISES, ...HOME_GYM_EXERCISES, ...COMBO_EXERCISES];
+
 export interface RoutinePreset {
 	name: string;
 	description: string;
 	scheduleMask: number;
 	prepSec: number;
-	exerciseNames: string[];
+	items: PresetRef[];
 }
 
-export const ROUTINE_PRESETS: RoutinePreset[] = [
+const BASE_ROUTINES: RoutinePreset[] = [
 	{
 		name: 'Kegel hằng ngày',
 		description: 'Thở bụng khởi động, rồi Kegel chậm và Kegel nhanh.',
 		scheduleMask: daysToMask([1, 2, 3, 4, 5, 6, 7]),
 		prepSec: 5,
-		exerciseNames: ['Thở bụng thả lỏng sàn chậu', 'Kegel giữ lâu', 'Kegel nhanh'],
+		items: [{ name: 'Thở bụng thả lỏng sàn chậu' }, { name: 'Kegel giữ lâu' }, { name: 'Kegel nhanh' }],
 	},
 	{
 		name: 'Core & thể dục dụng cụ cơ bản',
 		description: 'Bài nền cho cơ trung tâm: hollow, plank, cầu mông, hít đất, squat.',
 		scheduleMask: daysToMask([1, 3, 5]),
 		prepSec: 10,
-		exerciseNames: ['Hollow hold', 'Plank', 'Cầu mông (Glute bridge)', 'Hít đất', 'Squat'],
+		items: [
+			{ name: 'Hollow hold' },
+			{ name: 'Plank' },
+			{ name: 'Cầu mông (Glute bridge)' },
+			{ name: 'Hít đất' },
+			{ name: 'Squat' },
+		],
 	},
 	{
 		name: 'Giãn cơ buổi tối',
 		description: 'Thả lỏng hông và lưng trước khi ngủ.',
 		scheduleMask: daysToMask([2, 4, 6, 7]),
 		prepSec: 5,
-		exerciseNames: ["Tư thế em bé (Child's pose)", 'Giãn cơ hông (Pigeon)', 'Thở bụng thả lỏng sàn chậu'],
+		items: [{ name: "Tư thế em bé (Child's pose)" }, { name: 'Giãn cơ hông (Pigeon)' }, { name: 'Thở bụng thả lỏng sàn chậu' }],
 	},
 ];
+
+// Giáo án buổi sáng T2 → CN, 30–40 phút/buổi (test khoá khung thời lượng), mục tiêu giảm mỡ +
+// chức năng cương. Cơ sở: cardio vừa–cao ~160 phút/tuần (Gerbild 2018, Sex Med), HIIT giảm mỡ
+// tương đương cardio đều với ít thời gian hơn (Wewege 2017), sức mạnh mỗi nhóm cơ 2 buổi/tuần,
+// sàn chậu mỗi ngày (Dorey 2004). Lịch: sức mạnh T2/T4/T6 xen cardio T3/T5/T7, CN phục hồi.
+export const WEEKLY_PLAN: RoutinePreset[] = [
+	{
+		name: 'T2 · Thân dưới & mông',
+		description: 'Squat, gập hông, một chân, mông — nhóm cơ lớn nhất, đốt nhiều năng lượng nhất. Kết bằng swing tạ ấm.',
+		scheduleMask: daysToMask([1]),
+		prepSec: 10,
+		items: [
+			{ name: 'Khởi động toàn thân' },
+			{ name: 'Goblet squat tạ ấm' },
+			{ name: 'Romanian deadlift tạ tay' },
+			{ name: 'Bulgarian split squat' },
+			{ name: 'Hip thrust trên ghế' },
+			{ name: 'Swing tạ ấm' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'T3 · HIIT tạ ấm đốt mỡ',
+		description: 'Mạch 5 bài × 4 vòng (40 giây làm / 20 giây chuyển) + plank nghiêng. Ít thời gian mà giảm mỡ ngang cardio đều.',
+		scheduleMask: daysToMask([2]),
+		prepSec: 10,
+		items: [
+			{ name: 'Khởi động toàn thân' },
+			{ name: 'Mạch đốt mỡ tạ ấm' },
+			{ name: 'Plank nghiêng (Side plank)' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'T4 · Thân trên đẩy – kéo',
+		description: 'Ba superset: ngực / lưng, vai / lưng trên, tay sau / tay trước.',
+		scheduleMask: daysToMask([3]),
+		prepSec: 10,
+		items: [
+			{ name: 'Khởi động toàn thân' },
+			{ name: 'Superset ngực – lưng' },
+			{ name: 'Superset vai – lưng trên' },
+			{ name: 'Superset tay sau – tay trước' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'T5 · Zone 2 + core',
+		description: 'Đi bộ leo dốc ~23 phút ở nhịp tim vừa phải + mạch core. Cardio đều đặn là nền cho tim mạch và chức năng cương.',
+		scheduleMask: daysToMask([4]),
+		prepSec: 10,
+		items: [
+			{ name: 'Đi bộ nhanh khởi động', durationSec: 180 },
+			{ name: 'Đi bộ leo dốc (Zone 2)' },
+			{ name: 'Mạch core', sets: 2 },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'T6 · Toàn thân sức mạnh',
+		description: 'Deadlift sumo + hít đất, lunge + chèo tạ, xách tạ đi bộ, swing tạ ấm.',
+		scheduleMask: daysToMask([5]),
+		prepSec: 10,
+		items: [
+			{ name: 'Khởi động toàn thân' },
+			{ name: 'Superset deadlift sumo – hít đất' },
+			{ name: 'Superset lunge – chèo tạ' },
+			{ name: 'Xách tạ đi bộ (Farmer carry)' },
+			{ name: 'Swing tạ ấm' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'T7 · Chạy 4×4',
+		description: 'Interval 4×4 trên máy chạy — buổi nặng nhất tuần về tim mạch, nâng VO2max. Muốn đổi bài thì thay bằng "Chạy biến tốc 30/60".',
+		scheduleMask: daysToMask([6]),
+		prepSec: 10,
+		items: [
+			{ name: 'Đi bộ nhanh khởi động' },
+			{ name: 'Chạy 4×4 (Norwegian)' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ thả lỏng' },
+		],
+	},
+	{
+		name: 'CN · Phục hồi chủ động',
+		description: 'Đi bộ dốc nhẹ, cầu mông + sàn chậu, giãn hông, thở. Vẫn vận động nhưng để cơ hồi lại cho tuần mới.',
+		scheduleMask: daysToMask([7]),
+		prepSec: 10,
+		items: [
+			{ name: 'Đi bộ nhanh khởi động', durationSec: 180 },
+			{ name: 'Đi bộ leo dốc (Zone 2)' },
+			{ name: 'Cầu mông giữ + siết sàn chậu' },
+			{ name: 'Kegel 3 tư thế (Dorey)' },
+			{ name: 'Giãn cơ hông (Pigeon)' },
+			{ name: 'Giãn cơ thả lỏng' },
+			{ name: 'Thở bụng thả lỏng sàn chậu' },
+		],
+	},
+];
+
+export const ROUTINE_PRESETS: RoutinePreset[] = [...BASE_ROUTINES, ...WEEKLY_PLAN];

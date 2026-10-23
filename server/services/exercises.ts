@@ -123,6 +123,10 @@ export function findExercise(id: number): Promise<Exercise | null> {
 	return repo.getExerciseById(id);
 }
 
+export function findExercises(ids: number[]): Promise<Exercise[]> {
+	return repo.listExercisesByIds([...new Set(ids)]);
+}
+
 export async function requireExercise(id: number): Promise<Exercise> {
 	const row = await repo.getExerciseById(id);
 	if (!row) throw createError({ statusCode: 404, message: 'Bài tập không tồn tại' });
@@ -164,6 +168,26 @@ export async function addExercise(data: CreateExerciseData): Promise<ExerciseCom
 		resolved,
 	);
 	return toComputed(saved);
+}
+
+/**
+ * Tạo nhiều bài trong một batch nguyên tử — cho bộ mẫu: addExercise tốn ~6 query/bài, gói
+ * Workers Free chỉ cho 50 query D1 mỗi request. Cùng luật với addExercise (tên không trùng,
+ * kể cả trong lô); bài con phải có sẵn trong thư viện ⇒ bài đơn mới thì tạo ở lô trước.
+ */
+export async function addExercises(list: CreateExerciseData[]): Promise<void> {
+	const taken = new Map((await repo.listAllNames()).map((r) => [nameKey(r.name), r.name]));
+	const items = [];
+	for (const { components, ...fields } of list) {
+		const clash = taken.get(nameKey(fields.name));
+		if (clash) throw createError({ statusCode: 409, message: `Đã có bài tập tên "${clash}"` });
+		taken.set(nameKey(fields.name), fields.name);
+		items.push({
+			data: { ...fields, name: fields.name.trim(), instructions: fields.instructions ?? null },
+			components: fields.mode === 'combo' ? await resolveComponents(components ?? [], new Set()) : [],
+		});
+	}
+	await repo.createExercises(items);
 }
 
 export async function editExercise(id: number, data: UpdateExerciseData): Promise<ExerciseComputed> {

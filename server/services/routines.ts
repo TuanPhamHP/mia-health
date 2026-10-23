@@ -3,7 +3,7 @@ import * as exercisesSvc from './exercises';
 import * as mediaSvc from './media';
 import { coverOf } from '../../shared/utils/media';
 import { buildTimeline, estimateTimelineSec, toPlanItems } from '../../shared/utils/timeline';
-import type { Routine } from '../database/schema';
+import type { Exercise, Routine } from '../database/schema';
 import type { RoutineItemRow } from '../repositories/routines';
 import type { ExerciseComponentComputed, ExerciseMediaComputed } from '../types/exercises';
 import type { RoutineDetailComputed, RoutineItemComputed, RoutineSummaryComputed } from '../types/routines';
@@ -148,29 +148,64 @@ export async function deleteRoutine(id: number): Promise<RoutineDetailComputed> 
 
 // --- Items ---
 
-export async function addItem(routineId: number, data: ItemParamsData & { exerciseId: number }) {
-	await requireRoutine(routineId);
-	const exercise = await exercisesSvc.findExercise(data.exerciseId);
+// Thông số không gửi ⇒ copy từ bài tập. Copy (không tham chiếu) để sửa bài trong thư viện
+// không làm đổi âm thầm các giáo án đã soạn. Bài kết hợp: sets/restSec là số vòng / nghỉ
+// giữa vòng.
+function itemFrom(exercise: Exercise | null | undefined, data: ItemParamsData) {
 	if (!exercise) throw createError({ statusCode: 400, message: 'Bài tập không tồn tại' });
 	if (exercise.isArchived) {
 		throw createError({ statusCode: 400, message: `Bài tập "${exercise.name}" đã lưu trữ — khôi phục trước khi thêm` });
 	}
-	const position = (await repo.maxItemPosition(routineId)) + 1;
-	// Thông số không gửi ⇒ copy từ bài tập. Copy (không tham chiếu) để sửa bài trong
-	// thư viện không làm đổi âm thầm các giáo án đã soạn. Bài kết hợp: sets/restSec là
-	// số vòng / nghỉ giữa vòng.
-	await repo.createItem({
-		routineId,
+	return {
 		exerciseId: exercise.id,
-		position,
 		sets: data.sets ?? exercise.sets,
 		reps: data.reps ?? exercise.reps,
 		holdSec: data.holdSec ?? exercise.holdSec,
 		relaxSec: data.relaxSec ?? exercise.relaxSec,
 		durationSec: data.durationSec ?? exercise.durationSec,
 		restSec: data.restSec ?? exercise.restSec,
-	});
+	};
+}
+
+export async function addItem(routineId: number, data: ItemParamsData & { exerciseId: number }) {
+	await requireRoutine(routineId);
+	const item = itemFrom(await exercisesSvc.findExercise(data.exerciseId), data);
+	const position = (await repo.maxItemPosition(routineId)) + 1;
+	await repo.createItem({ ...item, routineId, position });
 	return getRoutine(routineId);
+}
+
+export interface CreateRoutineWithItemsData extends CreateRoutineData {
+	items: (ItemParamsData & { exerciseId: number })[];
+}
+
+/**
+ * Tạo nhiều giáo án kèm item trong một batch nguyên tử — cho bộ mẫu (addRoutine + addItem tốn
+ * ~10 query/item, gói Workers Free chỉ cho 50 query D1 mỗi request). Cùng luật với hai hàm đó.
+ */
+export async function addRoutines(list: CreateRoutineWithItemsData[]): Promise<void> {
+	const taken = new Map((await repo.listAllNames()).map((r) => [exercisesSvc.nameKey(r.name), r.name]));
+	for (const { name } of list) {
+		const clash = taken.get(exercisesSvc.nameKey(name));
+		if (clash) throw createError({ statusCode: 409, message: `Đã có giáo án tên "${clash}"` });
+		taken.set(exercisesSvc.nameKey(name), name);
+	}
+	const exercises = new Map(
+		(await exercisesSvc.findExercises(list.flatMap((r) => r.items.map((it) => it.exerciseId)))).map((e) => [e.id, e]),
+	);
+	let sortOrder = await repo.maxSortOrder();
+	await repo.createRoutines(
+		list.map(({ items, ...data }) => ({
+			data: { ...data, name: data.name.trim(), description: data.description ?? null, sortOrder: ++sortOrder },
+			items: items.map((it) => itemFrom(exercises.get(it.exerciseId), it)),
+		})),
+	);
+}
+
+/** Map tên (đã chuẩn hoá) → id, phục vụ seed idempotent theo tên. */
+export async function nameIndex(): Promise<Map<string, number>> {
+	const rows = await repo.listAllNames();
+	return new Map(rows.map((r) => [exercisesSvc.nameKey(r.name), r.id]));
 }
 
 async function requireItemOf(routineId: number, itemId: number) {

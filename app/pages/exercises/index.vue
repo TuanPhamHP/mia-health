@@ -149,7 +149,7 @@
 			<div class="flex flex-col items-center gap-3 py-4 text-center">
 				<UIcon name="i-heroicons-book-open" class="size-10 text-(--ui-text-muted)" />
 				<p class="text-sm text-(--ui-text-muted)">
-					Chưa có bài tập nào. Bắt đầu nhanh với bộ mẫu (Kegel, core, thể dục dụng cụ, giãn cơ) rồi chỉnh theo ý bạn.
+					Chưa có bài tập nào. Bắt đầu nhanh với bộ mẫu (Kegel, tạ ấm, tạ tay, máy chạy bộ, core, giãn cơ) rồi chỉnh theo ý bạn.
 				</p>
 				<UButton :loading="seeding" icon="i-heroicons-sparkles" @click="seed">Thêm bộ bài tập mẫu</UButton>
 			</div>

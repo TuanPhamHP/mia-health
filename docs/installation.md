@@ -28,7 +28,7 @@ Không set → login luôn 500 ("Auth chưa được cấu hình") — fail-safe
 
 ### Dữ liệu mẫu
 
-Đăng nhập xong, trang **Hôm nay** có nút **"Thêm bộ mẫu"** (gọi `POST /api/presets/seed`): 15 bài tập + 3 giáo án có lịch. Chạy lại không tạo trùng.
+Đăng nhập xong, trang **Hôm nay** có nút **"Thêm bộ mẫu"** (gọi `POST /api/presets/seed`): 62 bài tập (52 bài đơn + 10 bài kết hợp) + 10 giáo án có lịch, trong đó 7 giáo án sáng T2 → CN cho phòng tập tại nhà (tạ ấm, tạ tay, ghế, máy chạy bộ, thảm). Chạy lại không tạo trùng — DB đã có dữ liệu thì dùng nút **"Bổ sung bài & giáo án mẫu còn thiếu"** cuối trang **Giáo án** để thêm phần mẫu mới.
 
 ## Phạm vi ảnh hưởng — local vs prod
 
