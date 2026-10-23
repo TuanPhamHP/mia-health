@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792734639420,
+      "tag": "0000_watery_carnage",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792739987810,
+      "tag": "0001_married_silver_fox",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792742375679,
+      "tag": "0002_good_stature",
+      "breakpoints": true
+    }
+  ]
+}

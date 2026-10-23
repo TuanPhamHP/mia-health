@@ -1,0 +1,25 @@
+{
+	"name": "mia-health",
+	"compatibility_date": "2025-11-27",
+	// nitro `cloudflare.nodeCompat: true` cần cờ này (bản build tự thêm, khai ở đây để `wrangler pages dev` khớp prod).
+	"compatibility_flags": ["nodejs_compat"],
+	"pages_build_output_dir": "./dist",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "mia-health-db",
+			// Thay bằng id thật sau khi chạy `wrangler d1 create mia-health-db` (xem docs/deploy.md).
+			// Local dev chạy được với placeholder này — D1 local không cần id thật.
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "./server/database/migrations"
+		}
+	],
+	// Ảnh hướng dẫn tải lên. Local dev: getPlatformProxy giả lập trong .wrangler/state (không cần tạo).
+	// Production: tạo một lần bằng `npx wrangler r2 bucket create mia-health-media` (xem docs/deploy.md).
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "mia-health-media"
+		}
+	]
+}

@@ -1,0 +1,114 @@
+import { ref } from 'vue';
+import type {
+	AddMediaLinkInput,
+	CreateExerciseInput,
+	ExerciseCategory,
+	ExerciseDTO,
+	UpdateExerciseInput,
+	UpdateMediaInput,
+} from '#shared/types/exercises';
+import type { SeedResultDTO } from '#shared/types/presets';
+import { createRunner } from '~/utils/api';
+
+export function useExercises() {
+	const exercises = ref<ExerciseDTO[]>([]);
+	const current = ref<ExerciseDTO | null>(null);
+	const loading = ref(false);
+	const error = ref<string | null>(null);
+	const run = createRunner(loading, error);
+
+	async function list(filter?: { category?: ExerciseCategory; includeArchived?: boolean }): Promise<void> {
+		const params: Record<string, string> = {};
+		if (filter?.category) params['category'] = filter.category;
+		if (filter?.includeArchived) params['includeArchived'] = 'true';
+		const rows = await run(() => $fetch<ExerciseDTO[]>('/api/exercises', { params }));
+		if (rows) exercises.value = rows;
+	}
+
+	// Bản mới nhất của một bài → cập nhật cả `current` lẫn dòng tương ứng trong danh sách.
+	function apply(saved: ExerciseDTO | null): ExerciseDTO | null {
+		if (!saved) return null;
+		if (current.value?.id === saved.id) current.value = saved;
+		const idx = exercises.value.findIndex((e) => e.id === saved.id);
+		if (idx !== -1) exercises.value[idx] = saved;
+		return saved;
+	}
+
+	async function get(id: number): Promise<ExerciseDTO | null> {
+		const dto = await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}`));
+		if (dto) current.value = dto;
+		return dto;
+	}
+
+	async function create(input: CreateExerciseInput): Promise<ExerciseDTO | null> {
+		const saved = await run(() => $fetch<ExerciseDTO>('/api/exercises', { method: 'POST', body: input }));
+		if (saved) exercises.value.push(saved);
+		return saved;
+	}
+
+	async function update(id: number, input: UpdateExerciseInput): Promise<ExerciseDTO | null> {
+		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}`, { method: 'PATCH', body: input })));
+	}
+
+	async function remove(id: number): Promise<boolean> {
+		const ok = await run(() => $fetch(`/api/exercises/${id}`, { method: 'DELETE' }));
+		if (ok === null) return false;
+		exercises.value = exercises.value.filter((e) => e.id !== id);
+		if (current.value?.id === id) current.value = null;
+		return true;
+	}
+
+	// ---- Ảnh / video hướng dẫn: mọi thao tác trả bài tập mới nhất ----
+
+	async function uploadMedia(id: number, image: Blob, caption?: string): Promise<ExerciseDTO | null> {
+		const form = new FormData();
+		form.append('file', image, `upload.${image.type.split('/')[1] ?? 'bin'}`);
+		if (caption) form.append('caption', caption);
+		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/upload`, { method: 'POST', body: form })));
+	}
+
+	async function addMediaLink(id: number, input: AddMediaLinkInput): Promise<ExerciseDTO | null> {
+		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media`, { method: 'POST', body: input })));
+	}
+
+	async function updateMedia(id: number, mediaId: number, input: UpdateMediaInput): Promise<ExerciseDTO | null> {
+		return apply(
+			await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/${mediaId}`, { method: 'PATCH', body: input })),
+		);
+	}
+
+	async function removeMedia(id: number, mediaId: number): Promise<ExerciseDTO | null> {
+		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/${mediaId}`, { method: 'DELETE' })));
+	}
+
+	async function reorderMedia(id: number, mediaIds: number[]): Promise<ExerciseDTO | null> {
+		return apply(
+			await run(() =>
+				$fetch<ExerciseDTO>(`/api/exercises/${id}/media/reorder`, { method: 'POST', body: { mediaIds } }),
+			),
+		);
+	}
+
+	/** Thêm bộ bài tập + giáo án mẫu (idempotent theo tên). */
+	function seedPresets(): Promise<SeedResultDTO | null> {
+		return run(() => $fetch<SeedResultDTO>('/api/presets/seed', { method: 'POST' }));
+	}
+
+	return {
+		exercises,
+		current,
+		loading,
+		error,
+		list,
+		get,
+		create,
+		update,
+		remove,
+		seedPresets,
+		uploadMedia,
+		addMediaLink,
+		updateMedia,
+		removeMedia,
+		reorderMedia,
+	};
+}

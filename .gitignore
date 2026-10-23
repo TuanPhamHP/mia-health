@@ -1,0 +1,34 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Wrangler local dev state (D1 SQLite, cache — machine-specific)
+.wrangler/
+
+# D1 dump files — chứa dữ liệu thật từ prod, không commit
+prod-dump.sql
+*.dump.sql
+
+# Claude Code local settings (machine-specific overrides)
+.claude/settings.local.json

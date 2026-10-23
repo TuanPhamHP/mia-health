@@ -1,0 +1,48 @@
+# Cài đặt & chạy mia-health trên máy mới
+
+## Yêu cầu
+
+- Node.js ≥ 22 (đã chạy với Node 24)
+- yarn 1.x
+- Không cần cài wrangler global — có sẵn trong devDependencies (`npx wrangler …`)
+
+## Các bước
+
+```bash
+git clone <repo-url> health
+cd health
+yarn install
+cp .env.example .env      # rồi điền 2 biến auth bên dưới
+yarn db:migrate:local     # tạo schema trong D1 local (.wrangler/)
+yarn dev                  # http://localhost:3000
+```
+
+### `.env` (bắt buộc — auth)
+
+| Biến | Mô tả |
+|------|-------|
+| `NUXT_SESSION_PASSWORD` | ≥ 32 ký tự ngẫu nhiên: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
+| `NUXT_AUTH_PASSWORD` | Password nhập ở `/login` (local có thể đặt đơn giản, vd `mia-local`) |
+
+Không set → login luôn 500 ("Auth chưa được cấu hình") — fail-safe.
+
+### Dữ liệu mẫu
+
+Đăng nhập xong, trang **Hôm nay** có nút **"Thêm bộ mẫu"** (gọi `POST /api/presets/seed`): 15 bài tập + 3 giáo án có lịch. Chạy lại không tạo trùng.
+
+## Phạm vi ảnh hưởng — local vs prod
+
+| Lệnh | Ảnh hưởng |
+|------|-----------|
+| `yarn dev`, `yarn preview` | D1 + R2 local (`.wrangler/`, tự giả lập — không cần tạo bucket) + `.env`. Không đụng prod |
+| `yarn db:migrate:local`, `yarn db:reset:local` | Chỉ D1 local |
+| `yarn db:migrate:remote` | **D1 production** — cần `wrangler login` đúng account |
+| `yarn deploy` | **Deploy production** — xem `docs/deploy.md` |
+
+## Kiểm tra trước khi push
+
+```bash
+yarn typecheck   # vue-tsc — phải xanh (build KHÔNG check type)
+yarn test        # vitest: streak, weekday, timeline
+yarn build
+```
