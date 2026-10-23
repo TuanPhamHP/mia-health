@@ -55,7 +55,20 @@
 		}
 		if (!loadError.value && items.value.length === 0) loadError.value = 'Giáo án chưa có bài nào';
 		loaded.value = true;
+		preloadCovers();
 	});
+
+	// Tải trước ảnh bìa mọi bài ngay khi vào màn hình tập: đi qua service worker (CacheFirst cho
+	// /media) nên mạng rớt giữa buổi thì ảnh các bài phía sau vẫn có. Chỉ ảnh bìa — gallery đầy
+	// đủ tải khi người dùng mở hướng dẫn.
+	function preloadCovers() {
+		const urls = new Set<string>();
+		for (const it of items.value) {
+			const cover = coverOf({ media: [...(it.media ?? []), ...(it.combo?.media ?? [])] });
+			if (cover) urls.add(cover.url);
+		}
+		for (const url of urls) new Image().src = url;
+	}
 
 	// ---- Tín hiệu ----
 	const cues = useCues();

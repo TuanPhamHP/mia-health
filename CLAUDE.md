@@ -122,6 +122,7 @@ yarn deploy              # build + wrangler pages deploy (cần wrangler login)
 - Không commit secret (`.env`). `database_id` không phải secret — được commit.
 - Không tự ý cài dependency nặng.
 - Không cache `/api` trong service worker. (`/media/*` thì CacheFirst — key bất biến.)
+- Không bỏ `nitro.prerender.routes: ['/']`, `<NuxtPwaManifest />` (app.vue) hay đổi lại `registerType: 'autoUpdate'` — xem mục PWA ở §10.
 - Không gộp code tài chính vào repo này.
 
 ## 9. Auth
@@ -162,6 +163,12 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Xoá media / bài tập phải dọn R2 bằng tay** — CASCADE của D1 không với tới R2: lấy danh sách key TRƯỚC khi xoá row, xoá row, rồi xoá object. Lỗi khi xoá object chỉ log (row đã xoá; object mồ côi vô hại) — không làm request thất bại. Upload: ghi R2 trước, ghi row lỗi thì xoá object vừa ghi.
 - **Link YouTube chuẩn hoá về một dạng lúc lưu** (`watch?v=ID&t=Ns`, nhận cả youtu.be / shorts / embed / live), nhúng bằng `youtube-nocookie` kiểu "lite" (chỉ thumbnail, chạm mới nạp iframe). Chuẩn hoá và dựng link nhúng dùng cùng một hàm ở `shared/utils/media.ts` (có vitest).
 - **Bài kết hợp chưa có media riêng mượn ảnh bài con** (ảnh bìa + gallery ở trang chi tiết); trên màn hình tập mỗi bài con hiện ảnh của chính nó.
+- **PWA — ba điều kiện để "Thêm vào màn hình chính" chạy đúng** (đã kiểm bằng build production + `wrangler pages dev` + Chrome: installability không lỗi, SW kiểm soát trang, offline mở được app):
+  1. **Prerender `/`** (`nitro.prerender.routes`). `ssr: false` không sinh `index.html`; `navigateFallback: '/'` gọi `createHandlerBoundToURL('/')` ngay khi nạp `sw.js` ⇒ '/' không có trong precache ⇒ Workbox ném `non-precached-url` ⇒ SW không cài được (mất offline + cache ảnh). Kiểm: `grep -o 'url:"/"' dist/sw.js`.
+  2. **`<NuxtPwaManifest />` trong app.vue** — `<link rel="manifest">` chỉ được chèn qua component này; thiếu thì Android/Chrome không nhận ra PWA.
+  3. **`registerType: 'prompt'` + `app/plugins/pwa-update.client.ts`**, KHÔNG `autoUpdate`: autoUpdate gọi `location.reload()` ngay khi SW mới chiếm quyền — đang tập dở là mất buổi. Plugin vẫn cập nhật tự động nhưng hoãn khi đang ở `/play`.
+- **Mất mạng ≠ đăng xuất**: plugin nuxt-auth-utils nuốt mọi lỗi fetch session thành "chưa đăng nhập". `auth.global.ts` tự hỏi lại `/api/_auth/session`: server trả lời không có user ⇒ `/login`; không liên lạc được ⇒ ở lại trang (layout hiện dải "Đang offline" khi `navigator.onLine` false). KHÔNG dựa vào `navigator.onLine` để quyết định — wifi có sóng mà không ra mạng vẫn báo `true`.
+- **Màn hình tập tải trước ảnh bìa mọi bài khi mở** (qua SW ⇒ vào cache `exercise-media`), để mạng rớt giữa buổi vẫn có ảnh bài phía sau. `/api` vẫn không cache ⇒ offline thì mở được app nhưng không tải được dữ liệu mới.
 - **Mở hướng dẫn khi đang tập ⇒ tự tạm dừng đồng hồ, đóng ⇒ chạy tiếp** — chỉ khi chính sheet hướng dẫn đã dừng (không tự chạy một buổi người dùng đang tự tạm dừng).
 - **Luật nhịp thả áp nguyên cho bài luân phiên**: bỏ `relax` sau rep cuối của set khi ngay sau là nghỉ (chuyển bài / giữa vòng) hoặc hết cả bài kết hợp; chuyển thẳng sang bài con kế mà không nghỉ thì GIỮ. Golden test ở `timeline.test.ts` (mục "bài kết hợp").
 

@@ -9,8 +9,10 @@ export default defineNuxtConfig({
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'theme-color', content: '#0c1424' },
-        // iOS standalone (Add to Home Screen) — bắt buộc để mở fullscreen, ẩn URL bar
+        // iOS standalone (Add to Home Screen) — bắt buộc để mở fullscreen, ẩn URL bar.
+        // `mobile-web-app-capable` là tên chuẩn (Chrome báo apple-* đã cũ); Safari vẫn đọc apple-*.
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
         { name: 'apple-mobile-web-app-title', content: 'Mia Health' },
       ],
@@ -71,13 +73,24 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'cloudflare-pages',
+    // Prerender app shell ra dist/index.html. BẮT BUỘC cho service worker: `navigateFallback: '/'`
+    // gọi createHandlerBoundToURL('/') ngay khi nạp sw.js, '/' không có trong precache ⇒
+    // Workbox ném `non-precached-url` ⇒ SW không cài được (mất offline + cache ảnh /media).
+    // ssr:false nên không có index.html nếu không prerender; @vite-pwa/nuxt đổi entry
+    // 'index.html' thành '/' trong precache.
+    prerender: { routes: ['/'] },
     experimental: { asyncContext: true },
     cloudflare: { deployConfig: true, nodeCompat: true },
   },
 
   pwa: {
-    registerType: 'autoUpdate',
+    // KHÔNG dùng 'autoUpdate': SW mới chiếm quyền ⇒ client gọi location.reload() ngay — đang
+    // tập dở là mất buổi (iOS dạng app không có hộp hỏi rời trang). 'prompt' + plugin
+    // app/plugins/pwa-update.client.ts: vẫn tự cập nhật, nhưng hoãn khi đang ở /play.
+    registerType: 'prompt',
     manifest: {
+      // Định danh app cố định — đổi start_url sau này không biến thành "app khác" trên máy.
+      id: '/',
       name: 'Mia Health',
       short_name: 'Mia Health',
       description: 'Lịch tập & hẹn giờ bài tập cá nhân',
@@ -122,5 +135,7 @@ export default defineNuxtConfig({
     client: {
       installPrompt: true,
     },
+    // <link rel="manifest"> do <NuxtPwaManifest /> (app.vue) chèn lúc chạy — thiếu nó thì
+    // Android/Chrome không nhận ra PWA, "Cài đặt ứng dụng" chỉ tạo lối tắt.
   },
 })

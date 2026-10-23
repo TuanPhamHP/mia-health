@@ -35,6 +35,22 @@
 
 	const startOpen = ref(false);
 
+	// Service worker vẫn mở được app khi mất mạng, nhưng /api không cache (dữ liệu phải tươi) —
+	// báo rõ để người dùng không tưởng app hỏng / bị đăng xuất.
+	const online = ref(true);
+	function syncOnline() {
+		online.value = navigator.onLine;
+	}
+	onMounted(() => {
+		syncOnline();
+		window.addEventListener('online', syncOnline);
+		window.addEventListener('offline', syncOnline);
+	});
+	onBeforeUnmount(() => {
+		window.removeEventListener('online', syncOnline);
+		window.removeEventListener('offline', syncOnline);
+	});
+
 	const parentRoute = computed(() => {
 		if (/^\/routines\/[^/]+$/.test(route.path)) return '/routines';
 		if (/^\/exercises\/[^/]+$/.test(route.path)) return '/exercises';
@@ -96,6 +112,14 @@
 			class="mx-auto max-w-md px-4 pt-14"
 			:style="{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }"
 		>
+			<div
+				v-if="!online"
+				class="mt-3 flex items-center gap-2 rounded-xl bg-amber-500/15 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+				role="status"
+			>
+				<UIcon name="i-heroicons-signal-slash" class="size-5 shrink-0" />
+				Đang offline — cần mạng để tải dữ liệu và lưu buổi tập.
+			</div>
 			<slot />
 		</main>
 

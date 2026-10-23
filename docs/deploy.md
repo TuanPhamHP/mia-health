@@ -70,6 +70,20 @@ Mở URL bằng Safari (iOS) → Chia sẻ → **Thêm vào MH chính**; Chrome 
 
 - **iOS**: âm thanh + giọng đọc chỉ phát sau khi bấm "Bắt đầu" (luật của Safari); công tắc im lặng phần cứng tắt tiếng bíp. Rung không hỗ trợ trên iOS.
 - Màn hình được giữ sáng trong lúc tập (Screen Wake Lock — iOS ≥ 16.4, Chrome Android).
+- **iOS: app trên màn hình chính có bộ nhớ (cookie) riêng, tách khỏi Safari** — đăng nhập trong Safari không mang sang app; mở app lần đầu sẽ phải nhập password một lần (sau đó giữ 30 ngày, tự gia hạn khi dùng).
+- **Cập nhật**: deploy bản mới xong, app tự lên bản mới ở lần mở / chuyển trang kế tiếp (trang tự tải lại một lần). Đang ở màn hình tập thì **hoãn** tới lúc rời màn hình tập — không bao giờ tải lại giữa buổi.
+- **Mất mạng**: app vẫn mở được (service worker), hiện dải "Đang offline"; dữ liệu (giáo án, lịch sử) cần mạng. Ảnh bìa các bài của giáo án đang tập được tải sẵn khi mở màn hình tập.
+
+### Kiểm tra PWA trước khi deploy (khi đụng tới nuxt.config `pwa` / `nitro`)
+
+```bash
+yarn build
+grep -o 'url:"/"' dist/sw.js             # phải có — thiếu là SW không cài được
+ls dist/index.html                       # app shell đã prerender
+yarn preview                             # wrangler pages dev, mở bằng Chrome
+```
+
+Chrome DevTools → Application → Manifest (không có lỗi installability) và Service workers (activated, đang kiểm soát trang); tick "Offline" rồi tải lại — phải thấy app, không phải trang khủng long hay trang đăng nhập.
 
 ## Cách khác: deploy tự động từ Git
 
