@@ -8,9 +8,8 @@
 		{
 			"binding": "DB",
 			"database_name": "mia-health-db",
-			// Thay bằng id thật sau khi chạy `wrangler d1 create mia-health-db` (xem docs/deploy.md).
-			// Local dev chạy được với placeholder này — D1 local không cần id thật.
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			// Id thật của D1 production (tạo bằng `wrangler d1 create mia-health-db`, xem docs/deploy.md).
+			"database_id": "2b1915f8-609f-47ba-8678-0c7643577087",
 			"migrations_dir": "./server/database/migrations"
 		}
 	],
