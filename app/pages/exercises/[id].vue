@@ -254,7 +254,14 @@
 				@archive="onArchive"
 				@delete="onDelete"
 			/>
-			<MediaManagerSheet v-model:open="mediaOpen" :exercise="exercise" @update="(e) => { exercise = e }" />
+			<MediaManagerSheet
+				v-model:open="mediaOpen"
+				owner="exercises"
+				:value="exercise"
+				title="Ảnh & video hướng dẫn"
+				:subtitle="exercise.name"
+				@update="(e) => { exercise = e }"
+			/>
 		</template>
 	</div>
 </template>

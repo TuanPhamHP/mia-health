@@ -29,10 +29,15 @@ Kho ban đầu **573 thực phẩm**, nạp bằng migration dữ liệu `0005_s
 ### `FoodSummaryDTO` (danh sách)
 
 ```json
-{ "id": 527, "categoryId": 2, "name": "Ức gà không da (sống)", "source": "usda_sr_legacy", "energyKcal": 120, "proteinG": 22.5, "fatG": 2.62, "carbG": 0, "isArchived": false }
+{ "id": 527, "categoryId": 2, "name": "Ức gà không da (sống)", "source": "usda_sr_legacy", "energyKcal": 120, "proteinG": 22.5, "fatG": 2.62, "carbG": 0, "isArchived": false,
+  "cover": null }
 ```
 
-### `FoodDetailDTO` = `FoodDTO` (mọi cột) + `portions` + `category`
+`cover`: media đầu tiên của thực phẩm (`{ url, video }`) hoặc `null` — kho mẫu KHÔNG kèm ảnh, FE hiện emoji theo nhóm gốc (`foodEmoji()`).
+
+### `FoodDetailDTO` = `FoodDTO` (mọi cột) + `portions` + `category` + `dishes` + `media`
+
+`media: NutritionMediaDTO[]` — shape + endpoint ảnh: mục "Ảnh / video" ở bridge dishes (`/api/foods/:id/media…`).
 
 | Field | Ghi chú |
 |-------|---------|

@@ -12,3 +12,15 @@ export const DISH_CATEGORY_LABELS: Record<DishCategory, string> = {
   drink: 'Đồ uống',
   other: 'Khác',
 }
+
+/** Ảnh dự phòng khi món chưa có ảnh (kể cả mượn từ nguyên liệu) — luôn đi kèm tên món. */
+export const DISH_CATEGORY_EMOJI: Record<DishCategory, string> = {
+  main: '🥘',
+  veg: '🥬',
+  soup: '🍲',
+  noodle: '🍜',
+  rice: '🍚',
+  snack: '🥪',
+  drink: '🥤',
+  other: '🍽️',
+}

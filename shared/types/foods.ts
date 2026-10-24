@@ -7,7 +7,9 @@ import type {
 	updateFoodPortionSchema,
 	updateFoodSchema,
 } from '../schemas/foods';
+import type { Cover } from '../utils/media';
 import type { NutrientValues } from '../utils/nutrients';
+import type { NutritionMediaDTO } from './nutrition-media';
 
 export type CreateFoodInput = z.infer<typeof createFoodSchema>;
 export type UpdateFoodInput = z.infer<typeof updateFoodSchema>;
@@ -49,6 +51,7 @@ export interface FoodSummaryDTO {
 	fatG: number | null;
 	carbG: number | null;
 	isArchived: boolean;
+	cover: Cover | null;
 }
 
 /** Số liệu trên 100 g PHẦN ĂN ĐƯỢC; null = nguồn không có số liệu (khác 0). */
@@ -81,4 +84,5 @@ export interface FoodDetailDTO extends FoodDTO {
 	category: { id: number; name: string; parent: { id: number; name: string } | null };
 	/** Món đang dùng thực phẩm này làm nguyên liệu (theo tên). */
 	dishes: { id: number; name: string }[];
+	media: NutritionMediaDTO[];
 }

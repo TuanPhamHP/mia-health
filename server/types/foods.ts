@@ -1,11 +1,13 @@
 import type { Food, FoodCategory, FoodPortion } from '../database/schema';
 import type { FoodCategoryDTO, FoodDetailDTO, FoodDTO, FoodPortionDTO } from '../../shared/types/foods';
 import type { Serialized } from '../../shared/types/utils';
+import type { NutritionMediaComputed } from './nutrition-media';
 
 export type FoodDetailComputed = Food & {
 	portions: FoodPortion[];
 	category: FoodDetailDTO['category'];
 	dishes: FoodDetailDTO['dishes'];
+	media: NutritionMediaComputed[];
 };
 export type FoodCategoryNodeComputed = FoodCategory & {
 	foodCount: number;

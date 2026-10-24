@@ -71,6 +71,20 @@
       "when": 1792810823986,
       "tag": "0009_secret_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792815350667,
+      "tag": "0010_fluffy_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792815847255,
+      "tag": "0011_seed_dish_images",
+      "breakpoints": true
     }
   ]
 }

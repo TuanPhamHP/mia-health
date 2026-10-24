@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import type { CreateDishInput, DishCategory, DishSummaryDTO } from '#shared/types/dishes';
-	import { DISH_CATEGORY_LABELS, DISH_CATEGORY_ORDER } from '~/utils/dishes';
+	import { DISH_CATEGORY_EMOJI, DISH_CATEGORY_LABELS, DISH_CATEGORY_ORDER } from '~/utils/dishes';
 	import { formatAmount } from '~/utils/foods';
 
 	const pageTitle = usePageTitle();
@@ -129,9 +129,10 @@
 				v-for="d in s.items"
 				:key="d.id"
 				:to="`/dishes/${d.id}`"
-				class="flex items-center gap-3 rounded-xl border border-(--ui-border) px-3 py-2"
+				class="flex items-center gap-3 rounded-xl border border-(--ui-border) p-2 pr-3"
 				:class="d.isArchived ? 'opacity-60' : ''"
 			>
+				<CoverThumb :cover="d.cover" :emoji="DISH_CATEGORY_EMOJI[d.category]" class="size-14" />
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-sm font-medium text-(--ui-text-highlighted)">{{ d.name }}</p>
 					<p class="text-xs text-(--ui-text-muted)">

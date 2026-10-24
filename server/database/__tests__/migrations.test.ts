@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NUTRIENT_KEYS } from '../../../shared/utils/nutrients';
@@ -108,6 +108,29 @@ describe('món ăn mẫu', () => {
 		for (const d of perServing) {
 			expect(Number(d.kcal), String(d.name)).toBeGreaterThan(10);
 			expect(Number(d.kcal), String(d.name)).toBeLessThan(1200);
+		}
+	});
+});
+
+describe('ảnh món mẫu', () => {
+	const media = all(
+		`SELECT d.name, m.url, m.credit, m.source_url, m.storage_key FROM nutrition_media m JOIN dishes d ON d.id = m.dish_id`,
+	);
+	const publicDir = fileURLToPath(new URL('../../../public', import.meta.url));
+
+	it('mọi dòng trong scripts/foods/dish-images.mjs đều nối được với món mẫu', async () => {
+		const { DISH_IMAGES } = await import('../../../scripts/foods/dish-images.mjs');
+		expect(media).toHaveLength(DISH_IMAGES.length);
+		expect(new Set(media.map((m) => m.name)).size).toBe(media.length);
+	});
+
+	it('file ảnh có thật trong public/, kèm tác giả + giấy phép + link nguồn', () => {
+		for (const m of media) {
+			expect(String(m.url), String(m.name)).toMatch(/^\/seed\/dishes\/[a-z0-9-]+\.webp$/);
+			expect(existsSync(join(publicDir, String(m.url))), String(m.url)).toBe(true);
+			expect(String(m.credit), String(m.name)).toMatch(/ · (CC|Public domain)/);
+			expect(String(m.source_url)).toMatch(/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/);
+			expect(m.storage_key).toBeNull();
 		}
 	});
 });

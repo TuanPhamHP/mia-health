@@ -32,7 +32,7 @@ Không set → login luôn 500 ("Auth chưa được cấu hình") — fail-safe
 
 ### Kho thực phẩm
 
-Có sẵn sau `yarn db:migrate:local` — migration `0005_seed_foods.sql` nạp 573 thực phẩm (Bảng thành phần thực phẩm Việt Nam 2007 + USDA), `0007_seed_dishes.sql` nạp 56 món mẫu. Chỉ khi **sinh lại** dữ liệu mới cần: `pdftotext` (gói `poppler-utils`) + `unzip` cho `node scripts/foods/build-foods.mjs <file-migration-mới.sql>`; Node ≥ 22.5 (`node:sqlite`) cho `node scripts/foods/build-dishes.mjs <file-migration-mới.sql>` — xem `docs/bridges/foods.md`, `docs/bridges/dishes.md`.
+Có sẵn sau `yarn db:migrate:local` — migration `0005_seed_foods.sql` nạp 573 thực phẩm (Bảng thành phần thực phẩm Việt Nam 2007 + USDA), `0007_seed_dishes.sql` nạp 56 món mẫu, `0011_seed_dish_images.sql` gắn ảnh mẫu (file tĩnh trong `public/seed/dishes/`, có sẵn trong repo). Chỉ khi **sinh lại** dữ liệu mới cần: `pdftotext` (gói `poppler-utils`) + `unzip` cho `node scripts/foods/build-foods.mjs <file-migration-mới.sql>`; Node ≥ 22.5 (`node:sqlite`) cho `node scripts/foods/build-dishes.mjs <file-migration-mới.sql>`; mạng tới Wikimedia Commons + `sharp` (có sẵn trong `node_modules` qua `wrangler` → `miniflare`, không cài riêng) cho `node scripts/foods/build-dish-images.mjs <file-migration-mới.sql>` — xem `docs/bridges/foods.md`, `docs/bridges/dishes.md`.
 
 ## Phạm vi ảnh hưởng — local vs prod
 

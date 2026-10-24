@@ -25,6 +25,7 @@ Domain model:
 - `stats` — streak, tuần, heatmap, theo nhóm (không có bảng riêng, aggregate từ sessions).
 - `food_categories` + `foods` + `food_portions` — kho thực phẩm: cây nhóm 2 cấp (Thịt → Gà), thực phẩm với 29 chất trên 100 g phần ăn được, khẩu phần quen dùng ("1 bát con" = 150 g).
 - `dishes` + `dish_ingredients` — món ăn = công thức: thực phẩm + gam phần ăn được cho cả công thức, nấu cho `servings` phần. Dinh dưỡng không lưu, luôn tính từ thực phẩm.
+- `nutrition_media` — ảnh / video của món ăn HOẶC thực phẩm (một bảng, CHECK đúng một chủ): ảnh tải lên R2, link https, YouTube; ảnh mẫu của món mẫu là file tĩnh `/seed/dishes/` kèm tác giả + giấy phép.
 - `meal_entries` — nhật ký ăn theo ngày + bữa: món (theo phần / gam món chín) hoặc thực phẩm (theo gam), dinh dưỡng SNAPSHOT lúc ghi.
 - `menus` + `menu_items` — thực đơn một ngày (tham chiếu live món / thực phẩm), áp vào nhật ký bằng một chạm. `nutrition_targets` — mục tiêu ngày (một dòng).
 - `body_profile` (một dòng) + `body_weights` (một lần cân / ngày) — hồ sơ cơ thể; BMI / BMR / TDEE / mục tiêu đề xuất tính khi đọc (`shared/utils/body.ts`), không lưu.
@@ -86,7 +87,7 @@ app/                        # UI (pages, components, composables)
 
 **Không bao giờ** sửa tay file SQL đã generate. **Không** xoá lịch sử migration.
 **Thêm cột FK vào bảng đã có** → `drizzle-kit generate --custom` và viết tay `ALTER TABLE … REFERENCES … ON DELETE …` (drizzle-kit làm rơi mệnh đề `ON DELETE` — bài học từ mia-finance).
-**Migration dữ liệu kho thực phẩm / món mẫu** (`0005_seed_foods.sql`, `0007_seed_dishes.sql`) do `node scripts/foods/build-foods.mjs <file>` / `build-dishes.mjs <file>` SINH (cần `pdftotext`, `unzip`; nguồn tải vào `.cache/foods/`). Sửa dữ liệu ở `scripts/foods/curation.mjs` / `dishes.mjs`, rồi sinh vào một migration `--custom` MỚI — không sinh đè migration đã apply. `server/database/__tests__/migrations.test.ts` chạy mọi migration vào `node:sqlite` và soát dữ liệu (Atwater, trùng tên, cột khớp `NUTRIENTS`).
+**Migration dữ liệu kho thực phẩm / món mẫu / ảnh món mẫu** (`0005_seed_foods.sql`, `0007_seed_dishes.sql`, `0011_seed_dish_images.sql`) do `node scripts/foods/build-foods.mjs <file>` / `build-dishes.mjs <file>` / `build-dish-images.mjs <file>` SINH (cần `pdftotext`, `unzip`; nguồn tải vào `.cache/foods/`). Sửa dữ liệu ở `scripts/foods/curation.mjs` / `dishes.mjs` / `dish-images.mjs`, rồi sinh vào một migration `--custom` MỚI — không sinh đè migration đã apply. `server/database/__tests__/migrations.test.ts` chạy mọi migration vào `node:sqlite` và soát dữ liệu (Atwater, trùng tên, cột khớp `NUTRIENTS`).
 
 ## 5. Pattern D1 bắt buộc
 
@@ -181,6 +182,9 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Kho thực phẩm nạp bằng migration dữ liệu, KHÔNG qua `POST /api/presets/seed`**: ~600 dòng vượt trần 50 query/request; migration chạy cùng `db:migrate` nên DB nào cũng có sẵn.
 - **Món ăn = công thức, dinh dưỡng KHÔNG lưu, luôn tính từ thực phẩm** (`sumNutrients` / `multiplyNutrients`, có vitest): sửa thực phẩm là mọi món dùng nó đổi theo (như bài kết hợp lấy bài con live). Nguyên liệu = gam phần ăn được cho cả công thức; nấu hao nước nhưng chất gần như giữ nguyên ⇒ tổng = cộng nguyên liệu, bỏ qua hao hụt vitamin; dầu rán = lượng ngấm. Nguyên liệu thiếu số liệu một chất ⇒ cộng phần biết được + `missing` ⇒ UI hiện "≥" — KHÔNG coi null là 0, kể cả với hành lá vài gam: cùng luật đó sẽ biến nước mắm thiếu số natri thành 0 natri.
 - **Món mẫu: công thức ƯỚC LƯỢNG, kcal đối chiếu nguồn công bố** (Viện Dinh dưỡng qua báo chí, bảng Nutrihome; `build-dishes.mjs` cảnh báo lệch > 30%). Không có nguồn công bố công thức chuẩn — ghi rõ "ước lượng" ở UI. Migration trỏ thực phẩm qua `(source, source_code)`, bền với đổi tên.
+- **Ảnh món ăn / thực phẩm: một bảng `nutrition_media` cho hai chủ** (CHECK đúng một, CASCADE theo chủ), cùng luật với ảnh bài tập: R2 `dishes/<id>/…` · `foods/<id>/…` qua `/media/` (`KEY_PATTERN` nhận 3 tiền tố), ghi R2 trước / row sau, xoá chủ hoặc media phải dọn R2 bằng tay. Phần R2 dùng chung `storeImage()` (`services/media.ts`), form tải lên dùng chung `readImageUpload()` (`server/utils/upload.ts`). FE dùng chung `useMediaApi(owner)` + `MediaManagerSheet` (generic theo chủ) cho cả bài tập.
+- **Ảnh mẫu món mẫu = file tĩnh `public/seed/dishes/*.webp`, không phải R2**: migration không ghi được R2, và file đi kèm app thì DB nào (local, prod, máy mới) cũng có ảnh. Chọn TAY từ Wikimedia Commons (chỉ CC0 / PD / CC BY / CC BY-SA), cắt 800×600; **`credit` (tác giả · giấy phép) + `source_url` là điều kiện giấy phép — luôn hiện dưới ảnh** (`MediaGallery`). Món không tìm được ảnh tự do ĐÚNG món thì để trống (11 / 56) — ảnh sai món tệ hơn emoji. SW: `/seed/` StaleWhileRevalidate, không precache (~2,5 MB).
+- **Món chưa có ảnh mượn ảnh nguyên liệu nặng nhất có ẢNH** (không mượn thumbnail video), như bài kết hợp mượn ảnh bài con; trang chi tiết ghi rõ "Ảnh nguyên liệu". Không có gì ⇒ emoji theo nhóm (`DISH_CATEGORY_EMOJI`, `foodEmoji()` khớp từ khoá tên nhóm gốc — nhóm đổi tên được nên không khớp theo id). Kho thực phẩm mẫu KHÔNG kèm ảnh.
 - **Xoá thực phẩm đang là nguyên liệu ⇒ 409** (FK `dish_ingredients.food_id` RESTRICT là lưới cuối); thực phẩm lưu trữ sau khi đã vào món vẫn giữ được khi sửa món, chỉ chặn thêm mới.
 - **Nhật ký ăn là SNAPSHOT, thực đơn là LIVE** — như lịch sử buổi tập vs giáo án: sửa công thức / thực phẩm không viết lại ngày đã ăn; thực đơn luôn theo công thức hiện tại, áp vào ngày nào mới chụp snapshot. Đổi lượng một dòng nhật ký ⇒ nhân snapshot theo tỉ lệ, KHÔNG lấy lại từ thư viện. Xoá món / thực phẩm ⇒ FK nhật ký về NULL (tên + số giữ); đang nằm trong thực đơn ⇒ 409.
 - **Một dòng = đúng MỘT món hoặc MỘT thực phẩm** (CHECK `menu_items_one_target`); thực phẩm luôn theo gam (phần ăn được), món theo phần hoặc gam món chín (chỉ khi đã cân `cookedWeightG`). Khẩu phần ("1 bát con") quy ra gam ở client, `portionLabel` chỉ để hiển thị.
@@ -227,7 +231,7 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 | Stats (streak, tuần, heatmap) | `docs/bridges/stats.md` |
 | Programs (chương trình, giai đoạn, lịch) + Plan (lịch ngày, bỏ qua / đổi / thêm buổi) | `docs/bridges/programs.md` |
 | Foods (kho thực phẩm, nhóm, khẩu phần, nguồn số liệu) | `docs/bridges/foods.md` |
-| Dishes (món ăn = công thức, dinh dưỡng tính từ nguyên liệu, món mẫu) | `docs/bridges/dishes.md` |
+| Dishes (món ăn = công thức, dinh dưỡng tính từ nguyên liệu, món mẫu) + ảnh món ăn / thực phẩm | `docs/bridges/dishes.md` |
 | Meals (nhật ký ăn, thực đơn, mục tiêu dinh dưỡng) | `docs/bridges/meals.md` |
 | Body (hồ sơ, cân nặng, BMI / TDEE, mục tiêu đề xuất, gợi ý món) | `docs/bridges/body.md` |
 

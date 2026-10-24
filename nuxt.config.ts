@@ -134,6 +134,18 @@ export default defineNuxtConfig({
             cacheableResponse: { statuses: [200] },
           },
         },
+        {
+          // Ảnh mẫu đi kèm app (public/seed/, vd ảnh món mẫu) — không precache (~3 MB, chỉ tải
+          // khi xem). Tên file theo tên món, sinh lại có thể đổi nội dung ⇒ StaleWhileRevalidate:
+          // offline vẫn có, online thì tự làm mới.
+          urlPattern: /^.*\/seed\/.*/,
+          handler: 'StaleWhileRevalidate',
+          options: {
+            cacheName: 'seed-media',
+            expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
       ],
     },
     client: {

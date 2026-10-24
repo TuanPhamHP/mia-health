@@ -1,6 +1,8 @@
 import type { z } from 'zod';
 import type { createDishSchema, dishCategoryEnum, updateDishSchema } from '../schemas/dishes';
+import type { Cover } from '../utils/media';
 import type { NutrientKey, NutrientValues } from '../utils/nutrients';
+import type { NutritionMediaDTO } from './nutrition-media';
 
 export type DishCategory = z.infer<typeof dishCategoryEnum>;
 export type CreateDishInput = z.infer<typeof createDishSchema>;
@@ -55,9 +57,13 @@ export interface DishNutritionDTO {
 export interface DishSummaryDTO extends DishDTO {
 	ingredientCount: number;
 	perServing: Pick<NutrientValues, 'energyKcal' | 'proteinG' | 'fatG' | 'carbG'>;
+	/** Ảnh bìa: media đầu tiên của món; chưa có thì mượn ảnh nguyên liệu nặng nhất có ảnh. */
+	cover: Cover | null;
 }
 
 export interface DishDetailDTO extends DishDTO {
 	ingredients: DishIngredientDTO[];
 	nutrition: DishNutritionDTO;
+	media: NutritionMediaDTO[];
+	cover: Cover | null;
 }

@@ -5,13 +5,15 @@ import type { ExerciseMediaComputed } from '../types/exercises';
 
 // Module con của exercises: route handler đi qua exercises service (trả ExerciseDTO mới nhất,
 // như item giáo án trả RoutineDetailDTO); file này không import exercises service để khỏi vòng.
+// Phần R2 (`storeImage`, `deleteObjectsQuietly`, `getObject`) dùng chung cho ảnh món ăn / thực
+// phẩm (services/nutrition-media.ts).
 
 export const MAX_MEDIA_PER_EXERCISE = 10;
 // Client đã thu nhỏ ảnh (~100–300 KB) trước khi gửi — trần này chỉ chặn file thô bất thường.
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 // Chỉ phục vụ đúng dạng key do app sinh: chặn path traversal và dò key lạ trong bucket.
-const KEY_PATTERN = /^exercises\/\d+\/[0-9a-f-]{36}\.(webp|jpg|png|gif)$/;
+const KEY_PATTERN = /^(exercises|dishes|foods)\/\d+\/[0-9a-f-]{36}\.(webp|jpg|png|gif)$/;
 
 const IMAGE_SIGNATURES: { type: string; ext: string; test: (b: Uint8Array) => boolean }[] = [
 	{ type: 'image/jpeg', ext: 'jpg', test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
@@ -55,23 +57,31 @@ function cleanCaption(caption: string | null | undefined): string | null {
 	return caption?.trim() || null;
 }
 
-export async function addUpload(exerciseId: number, data: Uint8Array, caption: string | null) {
+/**
+ * Kiểm (cỡ + magic bytes) rồi ghi ảnh lên R2 dưới `<prefix>/<uuid>.<ext>` — dùng chung cho ảnh
+ * bài tập, món ăn, thực phẩm. Caller ghi row SAU, row lỗi thì `deleteObjectsQuietly([key])`.
+ */
+export async function storeImage(prefix: string, data: Uint8Array): Promise<{ key: string; url: string }> {
 	if (data.byteLength > MAX_UPLOAD_BYTES) {
 		throw createError({ statusCode: 413, message: 'Ảnh quá lớn (tối đa 5 MB)' });
 	}
 	const image = sniffImage(data);
 	if (!image) throw createError({ statusCode: 400, message: 'Chỉ nhận ảnh JPEG, PNG, WebP hoặc GIF' });
-	const position = await nextPosition(exerciseId);
-
-	const key = `exercises/${exerciseId}/${crypto.randomUUID()}.${image.ext}`;
+	const key = `${prefix}/${crypto.randomUUID()}.${image.ext}`;
 	await repo.putObject(key, data, image.type);
+	return { key, url: `/media/${key}` };
+}
+
+export async function addUpload(exerciseId: number, data: Uint8Array, caption: string | null) {
+	const position = await nextPosition(exerciseId);
+	const { key, url } = await storeImage(`exercises/${exerciseId}`, data);
 	// Ghi R2 trước, D1 sau: row lỗi thì xoá object vừa ghi — không để row trỏ vào file không có.
 	try {
 		await repo.createMedia({
 			exerciseId,
 			position,
 			kind: 'image',
-			url: `/media/${key}`,
+			url,
 			storageKey: key,
 			caption: cleanCaption(caption),
 		});

@@ -1,20 +1,21 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends { id: number; media: readonly ManagedMedia[] }">
 	/**
-	 * Quản lý ảnh / video của một bài: tải ảnh từ máy (chụp hoặc chọn — thu nhỏ + xoá EXIF trước
-	 * khi gửi), dán link ảnh hoặc YouTube (server tự nhận loại), sửa chú thích, đổi thứ tự, xoá.
-	 * Mỗi thao tác gọi API ngay và phát `update` với bài tập mới nhất — trang cha gán thẳng.
+	 * Quản lý ảnh / video của một bài tập, món ăn hoặc thực phẩm: tải ảnh từ máy (chụp hoặc chọn —
+	 * thu nhỏ + xoá EXIF trước khi gửi), dán link ảnh hoặc YouTube (server tự nhận loại), sửa chú
+	 * thích, đổi thứ tự, xoá. Mỗi thao tác gọi API ngay và phát `update` với chủ mới nhất — trang
+	 * cha gán thẳng.
 	 */
-	import type { ExerciseDTO, ExerciseMediaDTO } from '#shared/types/exercises';
 	import { mediaThumb, parseYouTube } from '#shared/utils/media';
+	import type { ManagedMedia, MediaOwnerPath } from '~/composables/useMediaApi';
 	import { prepareImage } from '~/utils/image';
 
 	const open = defineModel<boolean>('open', { default: false });
-	const props = defineProps<{ exercise: ExerciseDTO }>();
-	const emit = defineEmits<{ update: [exercise: ExerciseDTO] }>();
+	const props = defineProps<{ owner: MediaOwnerPath; value: T; title: string; subtitle: string }>();
+	const emit = defineEmits<{ update: [value: T] }>();
 
-	const MAX_MEDIA = 10; // khớp MAX_MEDIA_PER_EXERCISE ở server
+	const MAX_MEDIA = 10; // khớp MAX_MEDIA_PER_EXERCISE / MAX_MEDIA_PER_OWNER ở server
 
-	const api = useExercises();
+	const api = useMediaApi<T>(props.owner);
 	const toast = useToast();
 
 	const busy = ref(false);
@@ -25,21 +26,21 @@
 
 	// Chỉ nạp chú thích cho media mới — không ghi đè ô đang gõ dở khi danh sách cập nhật.
 	watch(
-		() => props.exercise.media,
+		() => props.value.media,
 		(list) => {
 			for (const m of list) if (!(m.id in captions)) captions[m.id] = m.caption ?? '';
 		},
 		{ immediate: true },
 	);
 
-	const remaining = computed(() => MAX_MEDIA - props.exercise.media.length);
+	const remaining = computed(() => MAX_MEDIA - props.value.media.length);
 	const linkKind = computed(() => {
 		const v = link.value.trim();
 		if (!v) return null;
 		return parseYouTube(v) ? 'youtube' : 'image';
 	});
 
-	function done(saved: ExerciseDTO | null): boolean {
+	function done(saved: T | null): boolean {
 		if (!saved) {
 			toast.add({ title: 'Có lỗi', description: api.error.value ?? undefined, color: 'error' });
 			return false;
@@ -64,7 +65,7 @@
 					toast.add({ title: `Bỏ qua "${file.name}"`, description: err instanceof Error ? err.message : undefined, color: 'error' });
 					continue;
 				}
-				if (!done(await api.uploadMedia(props.exercise.id, image))) break;
+				if (!done(await api.upload(props.value.id, image))) break;
 			}
 		} finally {
 			busy.value = false;
@@ -75,43 +76,44 @@
 	async function addLink() {
 		if (!linkKind.value) return;
 		busy.value = true;
-		const saved = await api.addMediaLink(props.exercise.id, { url: link.value.trim() });
+		const saved = await api.addLink(props.value.id, { url: link.value.trim() });
 		busy.value = false;
 		if (done(saved)) link.value = '';
 	}
 
-	async function saveCaption(m: ExerciseMediaDTO) {
+	async function saveCaption(m: ManagedMedia) {
 		const value = (captions[m.id] ?? '').trim();
 		if (value === (m.caption ?? '')) return;
-		done(await api.updateMedia(props.exercise.id, m.id, { caption: value || null }));
+		done(await api.update(props.value.id, m.id, { caption: value || null }));
 	}
 
 	async function move(index: number, dir: -1 | 1) {
-		const ids = props.exercise.media.map((m) => m.id);
+		const ids = props.value.media.map((m) => m.id);
 		const target = index + dir;
 		if (target < 0 || target >= ids.length) return;
 		[ids[index], ids[target]] = [ids[target]!, ids[index]!];
 		busy.value = true;
-		done(await api.reorderMedia(props.exercise.id, ids));
+		done(await api.reorder(props.value.id, ids));
 		busy.value = false;
 	}
 
-	async function remove(m: ExerciseMediaDTO) {
+	async function remove(m: ManagedMedia) {
 		const what = m.kind === 'youtube' ? 'video' : 'ảnh';
-		if (!confirm(`Xoá ${what} này khỏi bài tập?${m.storageKey ? ' Ảnh tải lên sẽ bị xoá hẳn.' : ''}`)) return;
+		if (!confirm(`Xoá ${what} này?${m.storageKey ? ' Ảnh tải lên sẽ bị xoá hẳn.' : ''}`)) return;
 		busy.value = true;
-		done(await api.removeMedia(props.exercise.id, m.id));
+		done(await api.remove(props.value.id, m.id));
 		busy.value = false;
 	}
 
-	function sourceLabel(m: ExerciseMediaDTO): string {
+	function sourceLabel(m: ManagedMedia): string {
 		if (m.kind === 'youtube') return 'Video YouTube';
+		if (m.credit) return `Ảnh mẫu · ${m.credit}`;
 		return m.storageKey ? 'Ảnh tải lên' : 'Ảnh từ link';
 	}
 </script>
 
 <template>
-	<AppSheet v-model:open="open" title="Ảnh & video hướng dẫn" :subtitle="exercise.name">
+	<AppSheet v-model:open="open" :title="title" :subtitle="subtitle">
 		<div class="space-y-4">
 			<div class="space-y-2">
 				<UButton
@@ -145,15 +147,15 @@
 				</p>
 			</div>
 
-			<div v-if="exercise.media.length" class="space-y-2">
+			<div v-if="value.media.length" class="space-y-2">
 				<div
-					v-for="(m, idx) in exercise.media"
+					v-for="(m, idx) in value.media"
 					:key="m.id"
 					class="flex items-start gap-3 rounded-xl border border-(--ui-border) p-2"
 				>
-					<ExerciseThumb :cover="mediaThumb(m)" :category="exercise.category" class="size-16" />
+					<CoverThumb :cover="mediaThumb(m)" class="size-16" />
 					<div class="min-w-0 flex-1 space-y-1">
-						<p class="flex items-center gap-1 text-xs text-(--ui-text-muted)">
+						<p class="line-clamp-2 text-xs text-(--ui-text-muted)">
 							<span v-if="idx === 0" class="font-medium text-(--ui-primary)">Ảnh bìa ·</span>
 							{{ sourceLabel(m) }}
 						</p>
@@ -168,7 +170,7 @@
 					</div>
 					<div class="flex shrink-0 flex-col">
 						<UButton icon="i-heroicons-chevron-up" color="neutral" variant="ghost" size="xs" :disabled="busy || idx === 0" aria-label="Lên" @click="move(idx, -1)" />
-						<UButton icon="i-heroicons-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="busy || idx === exercise.media.length - 1" aria-label="Xuống" @click="move(idx, 1)" />
+						<UButton icon="i-heroicons-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="busy || idx === value.media.length - 1" aria-label="Xuống" @click="move(idx, 1)" />
 						<UButton icon="i-heroicons-trash" color="error" variant="ghost" size="xs" :disabled="busy" aria-label="Xoá" @click="remove(m)" />
 					</div>
 				</div>

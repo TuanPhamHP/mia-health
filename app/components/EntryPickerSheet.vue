@@ -7,6 +7,7 @@
 	import type { DishSummaryDTO } from '#shared/types/dishes';
 	import type { FoodSummaryDTO } from '#shared/types/foods';
 	import type { Meal, MenuItemInput } from '#shared/types/meals';
+	import { DISH_CATEGORY_EMOJI } from '~/utils/dishes';
 	import { FOOD_SOURCE_SHORT, formatAmount } from '~/utils/foods';
 	import { MEAL_LABELS, MEAL_ORDER } from '~/utils/meals';
 
@@ -210,6 +211,7 @@
 					class="flex w-full items-center gap-3 rounded-xl border border-(--ui-border) px-3 py-2 text-left active:scale-[0.98] transition-transform"
 					@click="chooseDish(d)"
 				>
+					<CoverThumb :cover="d.cover" :emoji="DISH_CATEGORY_EMOJI[d.category]" class="size-11" />
 					<span class="min-w-0 flex-1">
 						<span class="block truncate text-sm font-medium text-(--ui-text-highlighted)">{{ d.name }}</span>
 						<span class="block text-xs text-(--ui-text-muted)">{{ formatAmount(d.perServing.energyKcal) }} kcal / phần</span>

@@ -20,15 +20,20 @@ Món = danh sách thực phẩm trong kho + khối lượng **phần ăn đượ
 | `source` | `'preset' \| 'user'` | |
 | `isArchived`, `createdAt`, `updatedAt` | | |
 
-### `DishSummaryDTO` = `DishDTO` + `{ ingredientCount, perServing: { energyKcal, proteinG, fatG, carbG } }`
+### `DishSummaryDTO` = `DishDTO` + `{ ingredientCount, perServing: { energyKcal, proteinG, fatG, carbG }, cover }`
 
 ```json
 { "id": 37, "name": "Phở bò tái", "category": "noodle", "description": "Bánh phở, thịt bò thăn tái, hành tây, hành lá, rau mùi; nước dùng xương (không tính).",
   "servings": 1, "cookedWeightG": null, "source": "preset", "isArchived": false, "createdAt": "2026-10-24T02:05:06.000Z", "updatedAt": null,
-  "ingredientCount": 6, "perServing": { "energyKcal": 336.3, "proteinG": 21.414, "fatG": 5.21, "carbG": 49.99 } }
+  "ingredientCount": 6, "perServing": { "energyKcal": 336.3, "proteinG": 21.414, "fatG": 5.21, "carbG": 49.99 },
+  "cover": { "url": "/seed/dishes/pho-bo-tai.webp", "video": false } }
 ```
 
-### `DishDetailDTO` = `DishDTO` + `ingredients` + `nutrition`
+`cover`: media đầu tiên của món (ảnh, hoặc thumbnail YouTube kèm `video: true`); món chưa có media ⇒ **mượn ảnh** (không mượn video) của nguyên liệu nặng nhất có ảnh; không có ⇒ `null` (FE hiện emoji theo nhóm `DISH_CATEGORY_EMOJI`).
+
+### `DishDetailDTO` = `DishDTO` + `ingredients` + `nutrition` + `media` + `cover`
+
+- `media: NutritionMediaDTO[]` theo `position` (xem mục Ảnh / video); `cover` như ở danh sách — `media` rỗng mà `cover` có ⇒ ảnh mượn từ nguyên liệu, FE ghi rõ.
 
 - `ingredients: DishIngredientDTO[]` theo `position`: `{ id, dishId, foodId, grams, position, createdAt, food: { name, isArchived, energyKcal, proteinG, fatG, carbG } }` — `grams` cho cả công thức, `food.*` trên 100 g (join live).
 - `nutrition: DishNutritionDTO`:
@@ -84,6 +89,48 @@ Số thực không làm tròn ở API (VD `21.413999999999998`) — FE định d
 | 409 | Xoá món đang nằm trong thực đơn | `Món đang nằm trong 1 thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá` |
 
 Phía thực phẩm: `DELETE /api/foods/:id` đang là nguyên liệu ⇒ **409** `Thực phẩm đang là nguyên liệu của 2 món — gỡ khỏi món hoặc lưu trữ thay vì xoá`; `FoodDetailDTO.dishes` liệt kê các món đó.
+
+
+## Ảnh / video (`nutrition_media`, dùng chung cho món ăn và thực phẩm)
+
+Cùng luật với ảnh bài tập (bridge exercises): ảnh tải lên R2 (client thu nhỏ + xoá EXIF, server nhận định dạng bằng magic bytes, ≤ 5 MB), link ảnh https, hoặc link YouTube (chuẩn hoá). Tối đa **10** / chủ. Phục vụ ảnh tải lên ở `/media/dishes/<id>/<uuid>.<ext>` · `/media/foods/<id>/<uuid>.<ext>` (cần đăng nhập, cache vĩnh viễn).
+
+**Ảnh mẫu của món mẫu** (45 / 56 món) là file tĩnh `/seed/dishes/<slug>.webp` (800×600, không cần đăng nhập), nạp bằng migration `0011_seed_dish_images.sql` — sinh bởi `scripts/foods/build-dish-images.mjs` từ danh sách chọn tay `scripts/foods/dish-images.mjs` (Wikimedia Commons, chỉ giấy phép tự do). `credit` + `sourceUrl` là điều kiện giấy phép CC BY / BY-SA ⇒ **FE phải hiện kèm ảnh** (`MediaGallery` tự hiện dưới dải ảnh).
+
+### `NutritionMediaDTO`
+
+```json
+{ "id": 27, "dishId": 37, "foodId": null, "position": 0, "kind": "image", "url": "/seed/dishes/pho-bo-tai.webp", "storageKey": null,
+  "caption": null, "credit": "Phương Huy · CC0", "sourceUrl": "https://commons.wikimedia.org/wiki/File:T%C3%B4_ph%E1%BB%9F_b%C3%B2_t%C3%A1i_%E1%BB%9F_Q1_(Ph%E1%BB%9F_24)_ng25th9n2023_(1).jpg" }
+```
+
+| Field | Ghi chú |
+|-------|---------|
+| `dishId` / `foodId` | Đúng MỘT (CHECK `nutrition_media_one_owner`); xoá chủ ⇒ CASCADE, R2 dọn bằng tay |
+| `kind` | `'image' \| 'youtube'` |
+| `url` | `/media/…` (tải lên) · `/seed/…` (ảnh mẫu) · `https://…` (link) · link YouTube đã chuẩn hoá |
+| `storageKey` | Có ⇒ ảnh R2, xoá media là xoá file |
+| `credit`, `sourceUrl` | Chỉ ảnh mẫu (người dùng thêm thì null) |
+
+### Endpoints — `:owner` = `dishes` | `foods`
+
+Mọi thao tác trả DTO chi tiết mới nhất của chủ (`DishDetailDTO` / `FoodDetailDTO`) — FE gán thẳng (`useMediaApi(owner)` + `MediaManagerSheet`, dùng chung với bài tập).
+
+| Method | Path | Request |
+|--------|------|---------|
+| POST | `/api/:owner/:id/media/upload` | multipart: `file` (bắt buộc) + `caption?` |
+| POST | `/api/:owner/:id/media` | `{ url (https), caption? }` — YouTube tự nhận |
+| PATCH | `/api/:owner/:id/media/:mediaId` | `{ caption }` |
+| DELETE | `/api/:owner/:id/media/:mediaId` | |
+| POST | `/api/:owner/:id/media/reorder` | `{ mediaIds }` — hoán vị đúng của media hiện có; đầu tiên = ảnh bìa |
+
+| Status | Khi nào | message |
+|--------|---------|---------|
+| 400 | Quá 10 media | `Mỗi món tối đa 10 ảnh / video` · `Mỗi thực phẩm tối đa 10 ảnh / video` |
+| 400 | File không phải ảnh | `Chỉ nhận ảnh JPEG, PNG, WebP hoặc GIF` |
+| 400 | `mediaIds` không phải hoán vị | `mediaIds phải chứa đúng và đủ ảnh / video hiện có của món` |
+| 404 | media không thuộc chủ | `Ảnh / video không tồn tại` |
+| 413 | > 5 MB | `Ảnh quá lớn (tối đa 5 MB)` |
 
 ## Callout FE
 

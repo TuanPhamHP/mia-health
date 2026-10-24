@@ -1,4 +1,5 @@
 import type { FoodCategoryNodeDTO, FoodSource } from '#shared/types/foods'
+import { foldText } from '#shared/utils/text'
 
 export const FOOD_SOURCE_SHORT: Record<FoodSource, string> = {
   vn_fct_2007: 'VN',
@@ -36,4 +37,29 @@ export function flattenCategories(tree: readonly FoodCategoryNodeDTO[]): { label
 /** Số thực phẩm của cả nhánh (nhóm gốc + các loại con). */
 export function branchCount(node: FoodCategoryNodeDTO): number {
   return node.foodCount + node.children.reduce((sum, c) => sum + c.foodCount, 0)
+}
+
+// Ảnh dự phòng của thực phẩm theo nhóm GỐC. Nhóm do người dùng đặt tên được ⇒ khớp theo từ khoá
+// (bỏ dấu), không theo id; không khớp ⇒ 🍽️. Bỏ dấu thì "dầu" = "đậu" ⇒ nhóm dầu mỡ nhận theo
+// "mỡ" / "bơ" và đứng TRƯỚC luật đậu.
+const FOOD_EMOJI_RULES: [RegExp, string][] = [
+  [/thit/, '🍖'],
+  [/ca |hai san|thuy san|tom|cua/, '🐟'],
+  [/trung/, '🥚'],
+  [/sua/, '🥛'],
+  [/ngu coc|tinh bot|gao|com/, '🍚'],
+  [/khoai|cu/, '🥔'],
+  [/(^|\W)(mo|bo)(\W|$)/, '🧈'],
+  [/dau|hat/, '🥜'],
+  [/rau/, '🥬'],
+  [/trai cay|qua/, '🍎'],
+  [/gia vi|nuoc cham|nuoc mam/, '🧂'],
+  [/duong|banh|keo/, '🍬'],
+  [/do uong|nuoc|bia|ruou/, '🥤'],
+  [/do hop/, '🥫'],
+]
+
+export function foodEmoji(rootCategoryName: string | null | undefined): string {
+  const name = foldText(rootCategoryName ?? '') + ' '
+  return FOOD_EMOJI_RULES.find(([re]) => re.test(name))?.[1] ?? '🍽️'
 }

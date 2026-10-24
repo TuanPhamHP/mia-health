@@ -1,5 +1,7 @@
 import * as repo from '../repositories/foods';
 import { nameKey } from './exercises';
+import * as mediaSvc from './media';
+import * as nutritionMediaSvc from './nutrition-media';
 import { foldText } from '../../shared/utils/text';
 import type { Food, FoodCategory } from '../database/schema';
 import type { CreateFoodInput, FoodSummaryDTO, UpdateFoodInput } from '../../shared/types/foods';
@@ -92,7 +94,10 @@ export async function listFoods(filter: { categoryId?: number; q?: string; inclu
 		if (!rows.some((c) => c.id === filter.categoryId)) return [];
 		categoryIds = [filter.categoryId, ...rows.filter((c) => c.parentId === filter.categoryId).map((c) => c.id)];
 	}
-	const rows = await repo.listFoodSummaries({ categoryIds, includeArchived: filter.includeArchived });
+	const [rows, covers] = await Promise.all([
+		repo.listFoodSummaries({ categoryIds, includeArchived: filter.includeArchived }),
+		nutritionMediaSvc.coversByOwner('food'),
+	]);
 	const q = filter.q ? foldText(filter.q) : '';
 	// Tên gốc tiếng Anh: chỉ khớp đầu từ và từ 4 ký tự — "com" không được kéo theo "commercially".
 	const englishWord = q.length >= 4 ? new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : null;
@@ -108,7 +113,7 @@ export async function listFoods(filter: { categoryId?: number; q?: string; inclu
 				.sort((a, b) => a.rank - b.rank || a.r.name.localeCompare(b.r.name, 'vi'))
 				.map((x) => x.r)
 		: rows.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-	return matched.map(({ sourceName: _, ...summary }) => summary);
+	return matched.map(({ sourceName: _, ...summary }) => ({ ...summary, cover: covers.get(summary.id) ?? null }));
 }
 
 async function requireFood(id: number): Promise<Food> {
@@ -129,7 +134,12 @@ export function findFoods(ids: number[]): Promise<Food[]> {
 
 export async function getFood(id: number): Promise<FoodDetailComputed> {
 	const food = await requireFood(id);
-	const [portions, categories, dishes] = await Promise.all([repo.listPortions(id), repo.listCategories(), repo.listDishUsage(id)]);
+	const [portions, categories, dishes, media] = await Promise.all([
+		repo.listPortions(id),
+		repo.listCategories(),
+		repo.listDishUsage(id),
+		nutritionMediaSvc.mediaByOwner('food', [id]).then((m) => m.get(id) ?? []),
+	]);
 	const category = categories.find((c) => c.id === food.categoryId)!; // FK RESTRICT
 	const parent = category.parentId === null ? null : categories.find((c) => c.id === category.parentId) ?? null;
 	return {
@@ -137,6 +147,7 @@ export async function getFood(id: number): Promise<FoodDetailComputed> {
 		portions,
 		category: { id: category.id, name: category.name, parent: parent ? { id: parent.id, name: parent.name } : null },
 		dishes,
+		media,
 	};
 }
 
@@ -181,8 +192,39 @@ export async function deleteFood(id: number): Promise<FoodDetailComputed> {
 			message: `Thực phẩm đang nằm trong ${menuCount} thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá`,
 		});
 	}
+	const keys = await nutritionMediaSvc.storageKeysOf({ kind: 'food', id });
 	await repo.removeFood(id);
+	await mediaSvc.deleteObjectsQuietly(keys);
 	return dto;
+}
+
+// --- Ảnh / video: mọi thao tác trả thực phẩm mới nhất, FE gán thẳng ---
+
+export async function addMediaUpload(id: number, data: Uint8Array, caption: string | null) {
+	await requireFood(id);
+	await nutritionMediaSvc.addUpload({ kind: 'food', id }, data, caption);
+	return getFood(id);
+}
+
+export async function addMediaLink(id: number, data: { url: string; caption?: string | null }) {
+	await requireFood(id);
+	await nutritionMediaSvc.addLink({ kind: 'food', id }, data);
+	return getFood(id);
+}
+
+export async function editMedia(id: number, mediaId: number, data: { caption: string | null }) {
+	await nutritionMediaSvc.editMedia({ kind: 'food', id }, mediaId, data);
+	return getFood(id);
+}
+
+export async function removeMedia(id: number, mediaId: number) {
+	await nutritionMediaSvc.removeMedia({ kind: 'food', id }, mediaId);
+	return getFood(id);
+}
+
+export async function reorderMedia(id: number, mediaIds: number[]) {
+	await nutritionMediaSvc.reorderMedia({ kind: 'food', id }, mediaIds);
+	return getFood(id);
 }
 
 // --- Khẩu phần: mọi thao tác trả thực phẩm mới nhất, FE gán thẳng ---

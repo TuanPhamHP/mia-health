@@ -1,5 +1,7 @@
 import * as repo from '../repositories/dishes';
 import * as foodsSvc from './foods';
+import * as nutritionMediaSvc from './nutrition-media';
+import * as mediaSvc from './media';
 import { nameKey } from './exercises';
 import { foldText } from '../../shared/utils/text';
 import { multiplyNutrients, NUTRIENT_KEYS, scaleNutrients, sumNutrients } from '../../shared/utils/nutrients';
@@ -7,6 +9,7 @@ import type { Dish, DishCategory } from '../database/schema';
 import type { IngredientRow } from '../repositories/dishes';
 import type { CreateDishInput, DishNutritionDTO, UpdateDishInput } from '../../shared/types/dishes';
 import type { NutrientValues } from '../../shared/utils/nutrients';
+import type { Cover } from '../../shared/utils/media';
 import type { DishDetailComputed, DishIngredientComputed, DishSummaryComputed } from '../types/dishes';
 
 function per100g(row: IngredientRow): NutrientValues {
@@ -45,6 +48,17 @@ function toIngredient(row: IngredientRow): DishIngredientComputed {
 	};
 }
 
+/**
+ * Ảnh bìa món: media của chính món; chưa có thì mượn ảnh nguyên liệu nặng nhất có ảnh — món tự
+ * soạn vẫn có hình (như bài kết hợp mượn ảnh bài con).
+ */
+function dishCover(own: Cover | null, ingredients: IngredientRow[], foodCovers: Map<number, Cover>): Cover | null {
+	if (own) return own;
+	// Chỉ mượn ẢNH: thumbnail video của nguyên liệu (cách sơ chế…) không đại diện được cho món.
+	const main = [...ingredients].sort((a, b) => b.grams - a.grams).find((r) => foodCovers.get(r.foodId)?.video === false);
+	return main ? foodCovers.get(main.foodId)! : null;
+}
+
 function groupByDish(rows: IngredientRow[]): Map<number, IngredientRow[]> {
 	const byDish = new Map<number, IngredientRow[]>();
 	for (const r of rows) byDish.set(r.dishId, [...(byDish.get(r.dishId) ?? []), r]);
@@ -60,13 +74,19 @@ export async function listDishes(filter: {
 	const rows = (await repo.listDishes(filter))
 		.filter((d) => !q || foldText(d.name).includes(q))
 		.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-	const byDish = groupByDish(await repo.listIngredients(rows.map((d) => d.id)));
+	const ingredientRows = await repo.listIngredients(rows.map((d) => d.id));
+	const byDish = groupByDish(ingredientRows);
+	const [ownCovers, foodCovers] = await Promise.all([
+		nutritionMediaSvc.coversByOwner('dish', rows.map((d) => d.id)),
+		nutritionMediaSvc.coversByOwner('food', ingredientRows.map((r) => r.foodId)),
+	]);
 	return rows.map((d) => {
 		const ingredients = byDish.get(d.id) ?? [];
 		const { perServing } = nutritionOf(d, ingredients);
 		return {
 			...d,
 			ingredientCount: ingredients.length,
+			cover: dishCover(ownCovers.get(d.id) ?? null, ingredients, foodCovers),
 			perServing: {
 				energyKcal: perServing.energyKcal,
 				proteinG: perServing.proteinG,
@@ -86,7 +106,17 @@ async function requireDish(id: number): Promise<Dish> {
 export async function getDish(id: number): Promise<DishDetailComputed> {
 	const dish = await requireDish(id);
 	const rows = await repo.listIngredients([id]);
-	return { ...dish, ingredients: rows.map(toIngredient), nutrition: nutritionOf(dish, rows) };
+	const [media, foodCovers] = await Promise.all([
+		nutritionMediaSvc.mediaByOwner('dish', [id]).then((m) => m.get(id) ?? []),
+		nutritionMediaSvc.coversByOwner('food', rows.map((r) => r.foodId)),
+	]);
+	return {
+		...dish,
+		ingredients: rows.map(toIngredient),
+		nutrition: nutritionOf(dish, rows),
+		media,
+		cover: dishCover(nutritionMediaSvc.coverOf(media), rows, foodCovers),
+	};
 }
 
 async function assertNameFree(name: string, exceptId?: number) {
@@ -152,6 +182,38 @@ export async function deleteDish(id: number): Promise<DishDetailComputed> {
 			message: `Món đang nằm trong ${menuCount} thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá`,
 		});
 	}
+	// Lấy key R2 trước: CASCADE xoá row media rồi thì không còn biết object nào để dọn.
+	const keys = await nutritionMediaSvc.storageKeysOf({ kind: 'dish', id });
 	await repo.removeDish(id);
+	await mediaSvc.deleteObjectsQuietly(keys);
 	return dto;
+}
+
+// --- Ảnh / video: mọi thao tác trả món mới nhất, FE gán thẳng ---
+
+export async function addMediaUpload(id: number, data: Uint8Array, caption: string | null) {
+	await requireDish(id);
+	await nutritionMediaSvc.addUpload({ kind: 'dish', id }, data, caption);
+	return getDish(id);
+}
+
+export async function addMediaLink(id: number, data: { url: string; caption?: string | null }) {
+	await requireDish(id);
+	await nutritionMediaSvc.addLink({ kind: 'dish', id }, data);
+	return getDish(id);
+}
+
+export async function editMedia(id: number, mediaId: number, data: { caption: string | null }) {
+	await nutritionMediaSvc.editMedia({ kind: 'dish', id }, mediaId, data);
+	return getDish(id);
+}
+
+export async function removeMedia(id: number, mediaId: number) {
+	await nutritionMediaSvc.removeMedia({ kind: 'dish', id }, mediaId);
+	return getDish(id);
+}
+
+export async function reorderMedia(id: number, mediaIds: number[]) {
+	await nutritionMediaSvc.reorderMedia({ kind: 'dish', id }, mediaIds);
+	return getDish(id);
 }

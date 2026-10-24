@@ -1,12 +1,5 @@
 import { ref } from 'vue';
-import type {
-	AddMediaLinkInput,
-	CreateExerciseInput,
-	ExerciseCategory,
-	ExerciseDTO,
-	UpdateExerciseInput,
-	UpdateMediaInput,
-} from '#shared/types/exercises';
+import type { CreateExerciseInput, ExerciseCategory, ExerciseDTO, UpdateExerciseInput } from '#shared/types/exercises';
 import type { SeedResultDTO } from '#shared/types/presets';
 import { localDateIso } from '#shared/utils/date';
 import { createRunner } from '~/utils/api';
@@ -59,36 +52,7 @@ export function useExercises() {
 		return true;
 	}
 
-	// ---- Ảnh / video hướng dẫn: mọi thao tác trả bài tập mới nhất ----
-
-	async function uploadMedia(id: number, image: Blob, caption?: string): Promise<ExerciseDTO | null> {
-		const form = new FormData();
-		form.append('file', image, `upload.${image.type.split('/')[1] ?? 'bin'}`);
-		if (caption) form.append('caption', caption);
-		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/upload`, { method: 'POST', body: form })));
-	}
-
-	async function addMediaLink(id: number, input: AddMediaLinkInput): Promise<ExerciseDTO | null> {
-		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media`, { method: 'POST', body: input })));
-	}
-
-	async function updateMedia(id: number, mediaId: number, input: UpdateMediaInput): Promise<ExerciseDTO | null> {
-		return apply(
-			await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/${mediaId}`, { method: 'PATCH', body: input })),
-		);
-	}
-
-	async function removeMedia(id: number, mediaId: number): Promise<ExerciseDTO | null> {
-		return apply(await run(() => $fetch<ExerciseDTO>(`/api/exercises/${id}/media/${mediaId}`, { method: 'DELETE' })));
-	}
-
-	async function reorderMedia(id: number, mediaIds: number[]): Promise<ExerciseDTO | null> {
-		return apply(
-			await run(() =>
-				$fetch<ExerciseDTO>(`/api/exercises/${id}/media/reorder`, { method: 'POST', body: { mediaIds } }),
-			),
-		);
-	}
+	// Ảnh / video hướng dẫn: useMediaApi('exercises') trong MediaManagerSheet (dùng chung với món ăn, thực phẩm).
 
 	/**
 	 * Thêm bộ bài tập + giáo án + chương trình mẫu (idempotent theo tên). Chương trình mẫu
@@ -109,10 +73,5 @@ export function useExercises() {
 		update,
 		remove,
 		seedPresets,
-		uploadMedia,
-		addMediaLink,
-		updateMedia,
-		removeMedia,
-		reorderMedia,
 	};
 }

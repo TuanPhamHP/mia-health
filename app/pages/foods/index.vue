@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import type { CreateFoodInput, FoodSummaryDTO } from '#shared/types/foods';
-	import { FOOD_SOURCE_SHORT, branchCount, formatAmount } from '~/utils/foods';
+	import { FOOD_SOURCE_SHORT, branchCount, foodEmoji, formatAmount } from '~/utils/foods';
 
 	const pageTitle = usePageTitle();
 	pageTitle.value = 'Ăn uống';
@@ -52,6 +52,16 @@
 	}
 
 	// Đang xem cả nhóm có loại con ⇒ chia mục theo loại cho dễ dò.
+	// Emoji dự phòng theo nhóm GỐC của thực phẩm (thực phẩm gắn vào nhóm gốc hoặc loại con).
+	const rootNameById = computed(() => {
+		const map = new Map<number, string>();
+		for (const t of categories.value) {
+			map.set(t.id, t.name);
+			for (const c of t.children) map.set(c.id, t.name);
+		}
+		return map;
+	});
+
 	const sections = computed(() => {
 		const top = selectedTop.value;
 		if (!top || selectedId.value !== top.id || top.children.length === 0 || query.value) {
@@ -190,9 +200,10 @@
 						v-for="f in s.items"
 						:key="f.id"
 						:to="`/foods/${f.id}`"
-						class="flex items-center gap-3 rounded-xl border border-(--ui-border) px-3 py-2"
+						class="flex items-center gap-3 rounded-xl border border-(--ui-border) p-2 pr-3"
 						:class="f.isArchived ? 'opacity-60' : ''"
 					>
+						<CoverThumb :cover="f.cover" :emoji="foodEmoji(rootNameById.get(f.categoryId))" class="size-12" />
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-sm font-medium text-(--ui-text-highlighted)">{{ f.name }}</p>
 							<p class="text-xs text-(--ui-text-muted)">

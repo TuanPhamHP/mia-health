@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	import type { AddFoodPortionInput, CreateFoodInput, FoodPortionDTO } from '#shared/types/foods';
 	import { scaleNutrients } from '#shared/utils/nutrients';
-	import { FOOD_SOURCE_LABELS, formatAmount, sourceCodeLabel } from '~/utils/foods';
+	import { FOOD_SOURCE_LABELS, foodEmoji, formatAmount, sourceCodeLabel } from '~/utils/foods';
 
 	const route = useRoute();
 	const toast = useToast();
@@ -61,6 +61,7 @@
 
 	// ---- Sửa / lưu trữ / xoá ----
 	const formOpen = ref(false);
+	const mediaOpen = ref(false);
 	async function onSave(input: CreateFoodInput) {
 		if (await act(() => update(foodId, input), 'Đã lưu')) formOpen.value = false;
 	}
@@ -111,12 +112,18 @@
 		</UCard>
 
 		<template v-else>
+			<!-- ~600 thực phẩm chưa có ảnh: không chiếm nửa màn hình bằng ô trống — chỉ hiện dải ảnh khi có -->
+			<MediaGallery v-if="food.media.length" :media="food.media" />
 			<UCard>
 				<div class="flex items-start gap-2">
+					<button v-if="!food.media.length" type="button" aria-label="Thêm ảnh thực phẩm" @click="() => { mediaOpen = true }">
+						<CoverThumb :cover="null" :emoji="foodEmoji(food.category.parent?.name ?? food.category.name)" class="size-12" />
+					</button>
 					<div class="min-w-0 flex-1">
 						<p class="text-xs text-(--ui-text-muted)">{{ categoryPath }}</p>
 						<h2 class="text-xl font-bold leading-tight text-(--ui-text-highlighted)">{{ food.name }}</h2>
 					</div>
+					<UButton icon="i-heroicons-photo" color="neutral" variant="ghost" size="sm" aria-label="Ảnh thực phẩm" @click="() => { mediaOpen = true }" />
 					<UButton icon="i-heroicons-pencil-square" color="neutral" variant="ghost" size="sm" aria-label="Sửa thực phẩm" @click="() => { formOpen = true }" />
 				</div>
 				<div class="mt-2 space-y-1 text-xs text-(--ui-text-muted)">
@@ -203,6 +210,14 @@
 
 			<FoodFormSheet v-model:open="formOpen" :food="food" :categories="categories" :saving="busy" @save="onSave" />
 			<PortionFormSheet v-model:open="portionOpen" :portion="editingPortion" :saving="busy" @save="onSavePortion" />
+			<MediaManagerSheet
+				v-model:open="mediaOpen"
+				owner="foods"
+				:value="food"
+				title="Ảnh thực phẩm"
+				:subtitle="food.name"
+				@update="(f) => { food = f }"
+			/>
 		</template>
 	</div>
 </template>

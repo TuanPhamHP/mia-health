@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	import type { CreateDishInput } from '#shared/types/dishes';
 	import { multiplyNutrients } from '#shared/utils/nutrients';
-	import { DISH_CATEGORY_LABELS } from '~/utils/dishes';
+	import { DISH_CATEGORY_EMOJI, DISH_CATEGORY_LABELS } from '~/utils/dishes';
 	import { formatAmount } from '~/utils/foods';
 
 	const route = useRoute();
@@ -51,6 +51,7 @@
 
 	// ---- Sửa / lưu trữ / xoá ----
 	const formOpen = ref(false);
+	const mediaOpen = ref(false);
 	async function onSave(input: CreateDishInput) {
 		if (await act(() => update(dishId, input), 'Đã lưu')) formOpen.value = false;
 	}
@@ -80,6 +81,22 @@
 		</UCard>
 
 		<template v-else>
+			<!-- Ảnh: của món; chưa có thì ảnh nguyên liệu chính (ghi rõ), không thì ô mời thêm ảnh -->
+			<MediaGallery v-if="dish.media.length" :media="dish.media" />
+			<button v-else-if="dish.cover" type="button" class="relative block w-full overflow-hidden rounded-2xl" @click="() => { mediaOpen = true }">
+				<img :src="dish.cover.url" alt="" class="aspect-video w-full object-cover" >
+				<span class="absolute bottom-2 left-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white">Ảnh nguyên liệu · chạm để thêm ảnh món</span>
+			</button>
+			<button
+				v-else
+				type="button"
+				class="flex aspect-[5/2] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-(--ui-border-accented) bg-(--ui-bg-elevated)/50"
+				@click="() => { mediaOpen = true }"
+			>
+				<span class="text-4xl" aria-hidden="true">{{ DISH_CATEGORY_EMOJI[dish.category] }}</span>
+				<span class="text-sm text-(--ui-text-muted)">Thêm ảnh món</span>
+			</button>
+
 			<UCard>
 				<div class="flex items-start gap-2">
 					<div class="min-w-0 flex-1">
@@ -88,6 +105,7 @@
 						</p>
 						<h2 class="text-xl font-bold leading-tight text-(--ui-text-highlighted)">{{ dish.name }}</h2>
 					</div>
+					<UButton icon="i-heroicons-photo" color="neutral" variant="ghost" size="sm" aria-label="Ảnh & video món" @click="() => { mediaOpen = true }" />
 					<UButton icon="i-heroicons-pencil-square" color="neutral" variant="ghost" size="sm" aria-label="Sửa món" @click="() => { formOpen = true }" />
 				</div>
 				<p v-if="dish.description" class="mt-2 whitespace-pre-line text-sm text-(--ui-text-muted)">{{ dish.description }}</p>
@@ -174,6 +192,14 @@
 			</div>
 
 			<DishFormSheet v-model:open="formOpen" :dish="dish" :saving="busy" @save="onSave" />
+			<MediaManagerSheet
+				v-model:open="mediaOpen"
+				owner="dishes"
+				:value="dish"
+				title="Ảnh & video món"
+				:subtitle="dish.name"
+				@update="(d) => { dish = d }"
+			/>
 		</template>
 	</div>
 </template>

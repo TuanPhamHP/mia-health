@@ -541,6 +541,37 @@ export const dishIngredients = sqliteTable(
 export type DishIngredient = typeof dishIngredients.$inferSelect;
 export type NewDishIngredient = typeof dishIngredients.$inferInsert;
 
+// Ảnh / video của món ăn và thực phẩm — một bảng cho hai chủ (đúng MỘT, như menu_items), CASCADE
+// theo chủ. Ảnh tải lên ở R2 `dishes/<id>/…` · `foods/<id>/…` (xoá row phải dọn object, như
+// exercise_media). Ảnh mẫu của món mẫu là file tĩnh `/seed/dishes/…` (migration không ghi được R2),
+// lấy từ Wikimedia Commons ⇒ `credit` (tác giả · giấy phép) + `source_url` BẮT BUỘC hiện kèm ảnh.
+export const nutritionMedia = sqliteTable(
+	'nutrition_media',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		dishId: integer('dish_id').references(() => dishes.id, { onDelete: 'cascade' }),
+		foodId: integer('food_id').references(() => foods.id, { onDelete: 'cascade' }),
+		position: integer('position').notNull().default(0),
+		kind: text('kind', { enum: MEDIA_KINDS }).notNull(),
+		url: text('url').notNull(),
+		storageKey: text('storage_key'),
+		caption: text('caption'),
+		credit: text('credit'),
+		sourceUrl: text('source_url'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [
+		index('nutrition_media_dish_idx').on(t.dishId),
+		index('nutrition_media_food_idx').on(t.foodId),
+		check('nutrition_media_one_owner', sql`(${t.dishId} IS NULL) <> (${t.foodId} IS NULL)`),
+	],
+);
+
+export type NutritionMedia = typeof nutritionMedia.$inferSelect;
+export type NewNutritionMedia = typeof nutritionMedia.$inferInsert;
+
 // ---------------------------------------------------------------------------
 // Thực đơn (mẫu tái dùng) + nhật ký ăn theo ngày
 // ---------------------------------------------------------------------------

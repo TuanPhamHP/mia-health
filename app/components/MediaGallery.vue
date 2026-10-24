@@ -2,12 +2,13 @@
 	/**
 	 * Dải ảnh / video hướng dẫn vuốt ngang. YouTube nhúng kiểu "lite": chỉ hiện thumbnail, chạm
 	 * mới nạp iframe — không kéo cả trình phát YouTube (~1 MB JS) cho mỗi lần mở trang. Chạm
-	 * ảnh để xem toàn màn hình (zoom bằng hai ngón như ảnh thường).
+	 * ảnh để xem toàn màn hình (zoom bằng hai ngón như ảnh thường). Ảnh có `credit` (ảnh mẫu
+	 * giấy phép CC) hiện tác giả · giấy phép + link nguồn dưới dải — điều kiện của giấy phép.
 	 */
 	import type { PlanMedia } from '#shared/utils/timeline';
 	import { parseYouTube, youtubeEmbedUrl, youtubeThumbUrl } from '#shared/utils/media';
 
-	const props = defineProps<{ media: readonly PlanMedia[] }>();
+	const props = defineProps<{ media: readonly (PlanMedia & { credit?: string | null; sourceUrl?: string | null })[] }>();
 
 	const slides = computed(() =>
 		props.media.map((m) => {
@@ -82,6 +83,11 @@
 			</figure>
 		</div>
 
+		<p v-if="slides[active]?.credit" class="mt-1 truncate px-1 text-[11px] text-(--ui-text-dimmed)">
+			Ảnh:
+			<a v-if="slides[active]!.sourceUrl" :href="slides[active]!.sourceUrl!" target="_blank" rel="noopener" class="underline">{{ slides[active]!.credit }}</a>
+			<template v-else>{{ slides[active]!.credit }}</template>
+		</p>
 		<div v-if="slides.length > 1" class="mt-2 flex justify-center gap-1.5">
 			<button
 				v-for="(_, i) in slides"
