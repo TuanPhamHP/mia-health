@@ -26,7 +26,12 @@
 		await load(date.value);
 		if (error.value) toast.add({ title: 'Lỗi tải nhật ký', description: error.value, color: 'error' });
 	}
-	onMounted(reload);
+	// ?add=<bữa> (nút "Ghi bữa …" ở trang chủ) ⇒ mở thẳng bảng chọn món; đọc trước khi reload() xoá query.
+	const addMeal = route.query['add'];
+	onMounted(async () => {
+		if (typeof addMeal === 'string' && (MEAL_ORDER as string[]).includes(addMeal)) openPicker(addMeal as Meal);
+		await reload();
+	});
 	watch(date, reload);
 
 	// Gợi ý chỉ có nghĩa cho hôm nay (phần còn lại của ngày đang diễn ra). Tính lại mỗi khi tổng

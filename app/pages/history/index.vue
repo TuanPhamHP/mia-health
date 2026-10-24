@@ -2,6 +2,7 @@
 	import type { CreateSessionInput, SessionDTO, UpdateSessionInput } from '#shared/types/sessions';
 	import { addDays, isoWeekday, localDateIso } from '#shared/utils/date';
 	import { formatDate, formatDuration, formatDurationShort, weekdayLabel } from '~/utils/format';
+	import { CATEGORY_ICONS, CATEGORY_LABELS, CATEGORY_TONES } from '~/utils/labels';
 
 	const pageTitle = usePageTitle();
 	pageTitle.value = 'Lịch sử tập';
@@ -30,6 +31,8 @@
 		await Promise.all([loadSessions(), loadOverview(today)]);
 		if (route.query.new) openCreate();
 	});
+
+	const maxCategorySets = computed(() => Math.max(1, ...(overview.value?.byCategory.map((c) => c.setsDone) ?? [1])));
 
 	async function loadMore() {
 		windowDays.value += 90;
@@ -141,6 +144,58 @@
 			</div>
 			<div v-if="overview" class="mt-4">
 				<ActivityHeatmap :days="overview.heatmap" :today="overview.today" />
+			</div>
+		</UCard>
+
+		<!-- Tuần này + phút theo tuần -->
+		<UCard v-if="overview">
+			<div class="mb-3 flex items-center gap-2 border-b border-(--ui-border) pb-3">
+				<UIcon name="i-heroicons-chart-bar" class="size-4 shrink-0 text-(--ui-primary)" />
+				<h3 class="flex-1 text-sm font-semibold text-(--ui-text-highlighted)">Phút tập theo tuần</h3>
+			</div>
+			<div class="mb-4 grid grid-cols-3 gap-2">
+				<div class="rounded-xl border border-(--ui-border) px-3 py-2">
+					<p class="text-[11px] text-(--ui-text-muted)">Buổi tuần này</p>
+					<p class="text-xl font-semibold text-(--ui-text-highlighted)">{{ overview.thisWeek.sessions }}</p>
+				</div>
+				<div class="rounded-xl border border-(--ui-border) px-3 py-2">
+					<p class="text-[11px] text-(--ui-text-muted)">Phút</p>
+					<p class="text-xl font-semibold text-(--ui-text-highlighted)">{{ Math.round(overview.thisWeek.durationSec / 60) }}</p>
+				</div>
+				<div class="rounded-xl border border-(--ui-border) px-3 py-2">
+					<p class="text-[11px] text-(--ui-text-muted)">Ngày có tập</p>
+					<p class="text-xl font-semibold text-(--ui-text-highlighted)">{{ overview.thisWeek.activeDays }}<span class="text-sm font-normal text-(--ui-text-muted)">/7</span></p>
+				</div>
+			</div>
+			<WeeklyBars :weeks="overview.weekly" />
+		</UCard>
+
+		<!-- Theo nhóm bài — một series ⇒ một màu cột; nhóm nhận diện bằng icon + tên -->
+		<UCard v-if="overview && overview.byCategory.length > 0">
+			<div class="mb-3 flex items-center gap-2 border-b border-(--ui-border) pb-3">
+				<UIcon name="i-heroicons-rectangle-stack" class="size-4 shrink-0 text-(--ui-primary)" />
+				<h3 class="flex-1 text-sm font-semibold text-(--ui-text-highlighted)">Số set theo nhóm</h3>
+				<span class="text-xs text-(--ui-text-muted)">30 ngày</span>
+			</div>
+			<div class="space-y-2.5">
+				<div v-for="c in overview.byCategory" :key="c.category" class="flex items-center gap-2.5 text-sm">
+					<span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-(--tone)/15 text-(--tone)" :class="CATEGORY_TONES[c.category]">
+						<UIcon :name="CATEGORY_ICONS[c.category]" class="size-4" />
+					</span>
+					<div class="min-w-0 flex-1">
+						<div class="flex items-center justify-between gap-2">
+							<span class="text-(--ui-text-highlighted)">{{ CATEGORY_LABELS[c.category] }}</span>
+							<span class="tabular-nums text-(--ui-text-muted)">{{ c.setsDone }} set</span>
+						</div>
+						<div class="mt-1 h-1.5 rounded-full bg-(--ui-bg-elevated)">
+							<div
+								class="h-full rounded-full bg-(--ui-primary)"
+								:style="{ width: `${(c.setsDone / maxCategorySets) * 100}%` }"
+								:title="`${CATEGORY_LABELS[c.category]}: ${c.setsDone} set · ${c.entries} lượt bài`"
+							/>
+						</div>
+					</div>
+				</div>
 			</div>
 		</UCard>
 

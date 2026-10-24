@@ -25,7 +25,7 @@
 
 	// Bottom nav: 2 tab | nút "Tập" ở giữa | 2 tab.
 	const leftTabs = [
-		{ label: 'Hôm nay', icon: 'i-heroicons-sun', to: '/' },
+		{ label: 'Hôm nay', icon: 'i-heroicons-sun', to: '/', also: ['/today'] },
 		// Chương trình + giáo án + thư viện bài tập chung một tab: chuyển qua lại bằng PlanTabs.
 		{ label: 'Kế hoạch', icon: 'i-heroicons-clipboard-document-list', to: '/programs', also: ['/routines', '/exercises'] },
 	];
@@ -53,6 +53,7 @@
 	});
 
 	const parentRoute = computed(() => {
+		if (route.path === '/today') return '/';
 		if (/^\/programs\/[^/]+$/.test(route.path)) return '/programs';
 		if (/^\/routines\/[^/]+$/.test(route.path)) return '/routines';
 		if (/^\/exercises\/[^/]+$/.test(route.path)) return '/exercises';
