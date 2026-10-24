@@ -26,11 +26,11 @@
 	// Bottom nav: 2 tab | nút "Tập" ở giữa | 2 tab.
 	const leftTabs = [
 		{ label: 'Hôm nay', icon: 'i-heroicons-sun', to: '/' },
-		// Chương trình + giáo án chung một tab: hai mục chuyển qua lại bằng PlanTabs.
-		{ label: 'Kế hoạch', icon: 'i-heroicons-clipboard-document-list', to: '/programs', also: '/routines' },
+		// Chương trình + giáo án + thư viện bài tập chung một tab: chuyển qua lại bằng PlanTabs.
+		{ label: 'Kế hoạch', icon: 'i-heroicons-clipboard-document-list', to: '/programs', also: ['/routines', '/exercises'] },
 	];
 	const rightTabs = [
-		{ label: 'Bài tập', icon: 'i-heroicons-book-open', to: '/exercises' },
+		{ label: 'Ăn uống', icon: 'i-heroicons-cake', to: '/foods' },
 		{ label: 'Lịch sử', icon: 'i-heroicons-calendar-days', to: '/history' },
 	];
 
@@ -56,6 +56,7 @@
 		if (/^\/programs\/[^/]+$/.test(route.path)) return '/programs';
 		if (/^\/routines\/[^/]+$/.test(route.path)) return '/routines';
 		if (/^\/exercises\/[^/]+$/.test(route.path)) return '/exercises';
+		if (/^\/foods\/[^/]+$/.test(route.path)) return '/foods';
 		return null;
 	});
 
@@ -64,8 +65,8 @@
 		return route.path === to || route.path.startsWith(to + '/');
 	}
 
-	function isTabActive(tab: { to: string; also?: string }): boolean {
-		return matches(tab.to) || (tab.also !== undefined && matches(tab.also));
+	function isTabActive(tab: { to: string; also?: string[] }): boolean {
+		return matches(tab.to) || (tab.also ?? []).some(matches);
 	}
 </script>
 

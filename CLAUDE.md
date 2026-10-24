@@ -6,7 +6,7 @@
 
 ## 1. Bối cảnh dự án
 
-**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần.
+**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần. Kèm **module dinh dưỡng** (tab "Ăn uống", làm từng phần): ① kho thực phẩm có đủ nutrition facts — ĐÃ CÓ; ② món ăn = công thức từ thực phẩm; ③ thực đơn + nhật ký ăn (khối lượng, kcal, các chất); ④ BMI, TDEE, gợi ý món.
 
 - Tách ra từ **mia-finance** (cùng stack, cùng kiến trúc) — app riêng, D1 riêng, deploy riêng. Lý do tách thay vì gộp: dữ liệu tài chính cách ly hoàn toàn, không phải tái cấu trúc 480 file route gốc của finance, mỗi app một icon PWA. Khi có app thứ 3 mới cân nhắc gom phần hạ tầng chung (auth, layout, CSS kính, `useDB`) thành Nuxt Layer.
 - Quy mô: **solo / single-user**, dữ liệu nhỏ.
@@ -23,6 +23,7 @@ Domain model:
 - `plan_changes` — thay đổi lịch chỉ cho MỘT ngày (bỏ qua / đổi buổi / thêm buổi). Module `plan` dựng lịch ngày từ chương trình đang theo + thay đổi.
 - `workout_sessions` + `session_entries` — buổi tập đã thực hiện (snapshot tên/nhóm bài).
 - `stats` — streak, tuần, heatmap, theo nhóm (không có bảng riêng, aggregate từ sessions).
+- `food_categories` + `foods` + `food_portions` — kho thực phẩm: cây nhóm 2 cấp (Thịt → Gà), thực phẩm với 29 chất trên 100 g phần ăn được, khẩu phần quen dùng ("1 bát con" = 150 g).
 
 ## 2. Tech stack (ĐÃ KHOÁ — không tự ý đổi)
 
@@ -81,6 +82,7 @@ app/                        # UI (pages, components, composables)
 
 **Không bao giờ** sửa tay file SQL đã generate. **Không** xoá lịch sử migration.
 **Thêm cột FK vào bảng đã có** → `drizzle-kit generate --custom` và viết tay `ALTER TABLE … REFERENCES … ON DELETE …` (drizzle-kit làm rơi mệnh đề `ON DELETE` — bài học từ mia-finance).
+**Migration dữ liệu kho thực phẩm** (`0005_seed_foods.sql`) do `node scripts/foods/build-foods.mjs <file>` SINH từ nguồn gốc (cần `pdftotext`, `unzip`; nguồn tải vào `.cache/foods/`). Sửa dữ liệu ở `scripts/foods/curation.mjs`, rồi sinh vào một migration `--custom` MỚI — không sinh đè migration đã apply. `server/database/__tests__/migrations.test.ts` chạy mọi migration vào `node:sqlite` và soát dữ liệu (Atwater, trùng tên, cột khớp `NUTRIENTS`).
 
 ## 5. Pattern D1 bắt buộc
 
@@ -109,7 +111,7 @@ yarn dev                 # dev (emulate D1 binding)
 yarn build               # build cho Cloudflare Pages → ./dist
 yarn preview             # chạy bản build trên workerd (wrangler pages dev) với D1 local
 yarn typecheck           # vue-tsc — PHẢI XANH trước khi push (build KHÔNG check type)
-yarn test                # vitest — shared/utils (streak, weekday, timeline, program) + tính nhất quán bộ mẫu
+yarn test                # vitest — shared/utils (streak, weekday, timeline, program, nutrients) + bộ mẫu + mọi migration chạy trên node:sqlite
 yarn db:generate         # sinh migration từ schema
 yarn db:migrate:local    # apply migration vào D1 local
 yarn db:migrate:remote   # apply migration vào D1 production
@@ -169,6 +171,12 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Xoá media / bài tập phải dọn R2 bằng tay** — CASCADE của D1 không với tới R2: lấy danh sách key TRƯỚC khi xoá row, xoá row, rồi xoá object. Lỗi khi xoá object chỉ log (row đã xoá; object mồ côi vô hại) — không làm request thất bại. Upload: ghi R2 trước, ghi row lỗi thì xoá object vừa ghi.
 - **Link YouTube chuẩn hoá về một dạng lúc lưu** (`watch?v=ID&t=Ns`, nhận cả youtu.be / shorts / embed / live), nhúng bằng `youtube-nocookie` kiểu "lite" (chỉ thumbnail, chạm mới nạp iframe). Chuẩn hoá và dựng link nhúng dùng cùng một hàm ở `shared/utils/media.ts` (có vitest).
 - **Bài kết hợp chưa có media riêng mượn ảnh bài con** (ảnh bìa + gallery ở trang chi tiết); trên màn hình tập mỗi bài con hiện ảnh của chính nó.
+- **Kho thực phẩm: nguồn chính là Bảng thành phần thực phẩm Việt Nam 2007** (Viện Dinh dưỡng; 526 thực phẩm, trích từ bản PDF FAO lưu trữ), bổ sung **USDA FoodData Central SR Legacy** (public domain) cho phần thịt bảng VN không tách (ức / đùi / cánh, có / không da) và vài món chín. Mỗi thực phẩm giữ `source` + `sourceCode` (mã số VN / FDC ID) + `sourceName` để tra lại; sửa thực phẩm từ bảng nguồn vẫn giữ `source`, `updatedAt` báo đã khác bản gốc.
+- **Số liệu dinh dưỡng là REAL, NULL = không có số liệu (khác 0).** Giá trị đo có sai số phân tích sẵn, không phải dữ liệu cần chính xác như thời lượng. NULL hiện "—", không cộng thành 0. Chỉ `energyKcal` bắt buộc.
+- **Glucid (`carbG`) KHÔNG gồm xơ** (chuẩn Codex, như bảng VN); số USDA "by difference" trừ xơ khi nhập. Vitamin A = RAE (bảng VN: retinol + β-caroten / 12). %DV theo FDA 2.000 kcal chỉ để hiện nhãn — mục tiêu riêng theo TDEE làm ở phần ④.
+- **Kho thực phẩm nạp bằng migration dữ liệu, KHÔNG qua `POST /api/presets/seed`**: ~600 dòng vượt trần 50 query/request; migration chạy cùng `db:migrate` nên DB nào cũng có sẵn.
+- **Nhóm thực phẩm 2 cấp, theo con vật / loại** (Thịt → Gà gồm cả ức, đùi, cánh, gan, mề…) — nhóm gốc khớp 14 nhóm của bảng VN. Xoá nhóm còn loại con / thực phẩm ⇒ 409 (FK RESTRICT là lưới cuối).
+- **Tab dưới: Hôm nay · Kế hoạch (Chương trình | Giáo án | Bài tập) · [Tập] · Ăn uống · Lịch sử** — thư viện bài tập vào trong Kế hoạch để nhường chỗ cho Ăn uống.
 - **PWA — ba điều kiện để "Thêm vào màn hình chính" chạy đúng** (đã kiểm bằng build production + `wrangler pages dev` + Chrome: installability không lỗi, SW kiểm soát trang, offline mở được app):
   1. **Prerender `/`** (`nitro.prerender.routes`). `ssr: false` không sinh `index.html`; `navigateFallback: '/'` gọi `createHandlerBoundToURL('/')` ngay khi nạp `sw.js` ⇒ '/' không có trong precache ⇒ Workbox ném `non-precached-url` ⇒ SW không cài được (mất offline + cache ảnh). Kiểm: `grep -o 'url:"/"' dist/sw.js`.
   2. **`<NuxtPwaManifest />` trong app.vue** — `<link rel="manifest">` chỉ được chèn qua component này; thiếu thì Android/Chrome không nhận ra PWA.
@@ -199,5 +207,6 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 | Sessions (buổi tập) | `docs/bridges/sessions.md` |
 | Stats (streak, tuần, heatmap) | `docs/bridges/stats.md` |
 | Programs (chương trình, giai đoạn, lịch) + Plan (lịch ngày, bỏ qua / đổi / thêm buổi) | `docs/bridges/programs.md` |
+| Foods (kho thực phẩm, nhóm, khẩu phần, nguồn số liệu) | `docs/bridges/foods.md` |
 
 **Quy trình bridge-doc cuốn chiếu** (giữ nguyên từ mia-finance): xong backend một module ⇒ viết/cập nhật bridge-doc NGAY trong cùng đợt, shape lấy từ response thật (`yarn dev` + curl), không bịa từ đọc code.

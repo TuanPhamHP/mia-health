@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 // ---------------------------------------------------------------------------
 // Thư viện bài tập
@@ -364,3 +365,117 @@ export const sessionEntries = sqliteTable(
 
 export type SessionEntry = typeof sessionEntries.$inferSelect;
 export type NewSessionEntry = typeof sessionEntries.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Dinh dưỡng — thực phẩm (nguyên liệu). Số liệu trên 100 g PHẦN ĂN ĐƯỢC.
+// ---------------------------------------------------------------------------
+
+// Cây 2 cấp: nhóm (Thịt) → loại (Gà). Thực phẩm gắn vào loại, hoặc thẳng vào nhóm không chia loại.
+export const foodCategories = sqliteTable(
+	'food_categories',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		// RESTRICT: service chặn xoá nhóm còn loại con / còn thực phẩm (409).
+		parentId: integer('parent_id').references((): AnySQLiteColumn => foodCategories.id, { onDelete: 'restrict' }),
+		name: text('name').notNull(),
+		position: integer('position').notNull().default(0),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [index('food_categories_parent_idx').on(t.parentId)],
+);
+
+export type FoodCategory = typeof foodCategories.$inferSelect;
+export type NewFoodCategory = typeof foodCategories.$inferInsert;
+
+//   vn_fct_2007    — Bảng thành phần thực phẩm Việt Nam 2007 (Viện Dinh dưỡng), source_code = mã số
+//   usda_sr_legacy — USDA FoodData Central SR Legacy 2018, source_code = FDC ID
+//   user           — người dùng tự nhập
+export const FOOD_SOURCES = ['vn_fct_2007', 'usda_sr_legacy', 'user'] as const;
+export type FoodSource = (typeof FOOD_SOURCES)[number];
+
+// Số liệu dinh dưỡng là REAL: giá trị đo có sai số phân tích sẵn (±10%), không phải dữ liệu
+// cần chính xác như thời lượng. NULL = bảng nguồn không có số liệu — KHÁC 0, UI hiện "—".
+// Glucid = carbohydrate KHÔNG gồm xơ (chuẩn Codex, như bảng VN); số USDA đã trừ xơ khi nhập.
+// Thứ tự cột khớp NUTRIENTS ở shared/utils/nutrients.ts.
+const nutrientColumns = {
+	energyKcal: real('energy_kcal').notNull(),
+	waterG: real('water_g'),
+	proteinG: real('protein_g'),
+	fatG: real('fat_g'),
+	satFatG: real('sat_fat_g'),
+	monoFatG: real('mono_fat_g'),
+	polyFatG: real('poly_fat_g'),
+	transFatG: real('trans_fat_g'),
+	cholesterolMg: real('cholesterol_mg'),
+	carbG: real('carb_g'),
+	fiberG: real('fiber_g'),
+	sugarG: real('sugar_g'),
+	sodiumMg: real('sodium_mg'),
+	potassiumMg: real('potassium_mg'),
+	calciumMg: real('calcium_mg'),
+	phosphorusMg: real('phosphorus_mg'),
+	magnesiumMg: real('magnesium_mg'),
+	ironMg: real('iron_mg'),
+	zincMg: real('zinc_mg'),
+	vitaminAUg: real('vitamin_a_ug'), // RAE
+	vitaminB1Mg: real('vitamin_b1_mg'),
+	vitaminB2Mg: real('vitamin_b2_mg'),
+	niacinMg: real('niacin_mg'),
+	vitaminB6Mg: real('vitamin_b6_mg'),
+	folateUg: real('folate_ug'),
+	vitaminB12Ug: real('vitamin_b12_ug'),
+	vitaminCMg: real('vitamin_c_mg'),
+	vitaminDUg: real('vitamin_d_ug'),
+	vitaminEMg: real('vitamin_e_mg'),
+};
+
+export const foods = sqliteTable(
+	'foods',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		// RESTRICT: đổi / xoá nhóm phải chuyển thực phẩm trước.
+		categoryId: integer('category_id')
+			.notNull()
+			.references(() => foodCategories.id, { onDelete: 'restrict' }),
+		name: text('name').notNull(),
+		source: text('source', { enum: FOOD_SOURCES }).notNull().default('user'),
+		sourceCode: text('source_code'), // mã gốc để tra lại bảng nguồn
+		sourceName: text('source_name'), // tên gốc trong bảng nguồn (tiếng Anh)
+		refusePct: real('refuse_pct'), // % thải bỏ khi mua (xương, vỏ…) — số liệu tính trên phần ăn được
+		note: text('note'),
+		...nutrientColumns,
+		isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [uniqueIndex('foods_name_unique').on(t.name), index('foods_category_idx').on(t.categoryId)],
+);
+
+export type Food = typeof foods.$inferSelect;
+export type NewFood = typeof foods.$inferInsert;
+
+// Khẩu phần quen dùng: "1 quả trứng" = 50 g, "1 bát cơm" = 150 g — để nhập theo đơn vị đời thường.
+export const foodPortions = sqliteTable(
+	'food_portions',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		foodId: integer('food_id')
+			.notNull()
+			.references(() => foods.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		grams: real('grams').notNull(),
+		position: integer('position').notNull().default(0),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [index('food_portions_food_idx').on(t.foodId)],
+);
+
+export type FoodPortion = typeof foodPortions.$inferSelect;
+export type NewFoodPortion = typeof foodPortions.$inferInsert;

@@ -55,4 +55,7 @@ POST   /api/programs/:id/phases/reorder
 POST   /api/programs/:id/phases/:phaseId/slots   DELETE /api/programs/:id/phases/:phaseId/slots/:slotId
 GET    /api/plan/today?date=     POST /api/plan/changes     DELETE /api/plan/changes/:id
 GET    /api/stats/overview?today=
+GET    /api/food-categories      POST /api/food-categories  PATCH|DELETE /api/food-categories/:id
+GET    /api/foods?categoryId=&q= POST /api/foods            GET|PATCH|DELETE /api/foods/:id
+POST   /api/foods/:id/portions   PATCH|DELETE /api/foods/:id/portions/:portionId
 ```

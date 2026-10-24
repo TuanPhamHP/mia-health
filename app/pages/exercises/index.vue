@@ -13,7 +13,7 @@
 	} from '~/utils/labels';
 
 	const pageTitle = usePageTitle();
-	pageTitle.value = 'Thư viện bài tập';
+	pageTitle.value = 'Kế hoạch';
 	useHead({ title: 'Bài tập — Mia Health' });
 
 	const toast = useToast();
@@ -94,6 +94,8 @@
 
 <template>
 	<div class="py-4 space-y-3">
+		<PlanTabs />
+
 		<div class="flex items-center gap-2">
 			<UButton icon="i-heroicons-plus" @click="() => { sheetOpen = true }">Bài tập</UButton>
 			<UButton :icon="COMBO_ICON" variant="soft" @click="() => { comboOpen = true }">Kết hợp</UButton>

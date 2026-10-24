@@ -1,7 +1,8 @@
 <script setup lang="ts">
 	/**
-	 * Hai mục của tab "Kế hoạch": Chương trình (mục tiêu + lịch theo tuần) và Giáo án (từng
-	 * buổi tập). Dòng giải thích bên dưới để người dùng biết thứ nào quyết định "hôm nay tập gì".
+	 * Ba mục của tab "Kế hoạch": Chương trình (mục tiêu + lịch theo tuần) → Giáo án (từng buổi
+	 * tập) → Bài tập (thư viện). Dòng giải thích bên dưới để người dùng biết thứ nào quyết định
+	 * "hôm nay tập gì".
 	 */
 	const route = useRoute();
 
@@ -18,6 +19,12 @@
 			icon: 'i-heroicons-clipboard-document-list',
 			hint: 'Giáo án = một buổi tập (danh sách bài). Muốn tập theo lịch thì nhặt giáo án vào ngày của một chương trình.',
 		},
+		{
+			label: 'Bài tập',
+			to: '/exercises',
+			icon: 'i-heroicons-book-open',
+			hint: 'Thư viện bài tập kèm ảnh / video hướng dẫn — soạn giáo án bằng cách nhặt bài từ đây.',
+		},
 	];
 
 	const active = computed(() => TABS.find((t) => route.path.startsWith(t.to)) ?? TABS[0]!);
@@ -25,7 +32,7 @@
 
 <template>
 	<div class="space-y-1.5">
-		<nav class="grid grid-cols-2 gap-1 rounded-xl bg-(--ui-bg-elevated) p-1" aria-label="Kế hoạch">
+		<nav class="grid grid-cols-3 gap-1 rounded-xl bg-(--ui-bg-elevated) p-1" aria-label="Kế hoạch">
 			<NuxtLink
 				v-for="t in TABS"
 				:key="t.to"

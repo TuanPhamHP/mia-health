@@ -30,6 +30,10 @@ Không set → login luôn 500 ("Auth chưa được cấu hình") — fail-safe
 
 Đăng nhập xong, trang **Hôm nay** có nút **"Thêm bộ mẫu"** (gọi `POST /api/presets/seed`): 62 bài tập, 11 giáo án và 4 chương trình theo mục tiêu — "Giảm mỡ tại nhà" (8 tuần, buổi sáng 30–40 phút với tạ ấm, tạ tay, ghế, máy chạy bộ, thảm) và "Sàn chậu & sinh lý nam" được theo luôn từ hôm nay. Chạy lại không tạo trùng — DB đã có dữ liệu thì dùng nút **"Bổ sung mẫu còn thiếu"** cuối trang **Kế hoạch**.
 
+### Kho thực phẩm
+
+Có sẵn sau `yarn db:migrate:local` — migration `0005_seed_foods.sql` nạp 573 thực phẩm (Bảng thành phần thực phẩm Việt Nam 2007 + USDA). Chỉ khi **sinh lại** dữ liệu từ nguồn gốc mới cần `pdftotext` (gói `poppler-utils`) và `unzip`: `node scripts/foods/build-foods.mjs <file-migration-mới.sql>` — xem `docs/bridges/foods.md`.
+
 ## Phạm vi ảnh hưởng — local vs prod
 
 | Lệnh | Ảnh hưởng |

@@ -6,3 +6,4 @@ export * from './stats';
 export * from './media';
 export * from './programs';
 export * from './plan';
+export * from './foods';

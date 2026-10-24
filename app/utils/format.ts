@@ -38,12 +38,5 @@ export function formatDurationShort(totalSec: number): string {
   return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(min / 60)} giờ`
 }
 
-/** Bỏ dấu + hạ chữ để tìm kiếm: "gap bung" khớp "Gập bụng (Crunch)". */
-export function foldText(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLocaleLowerCase('vi')
-}
+// Dùng chung server (tìm thực phẩm) + client — định nghĩa ở shared.
+export { foldText } from '#shared/utils/text'
