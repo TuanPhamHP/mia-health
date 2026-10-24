@@ -163,14 +163,22 @@ export async function editFood(id: number, data: UpdateFoodInput): Promise<FoodD
 	return getFood(id);
 }
 
-// Đang là nguyên liệu của món ⇒ 409, KHÔNG tự gỡ: âm thầm làm hụt nguyên liệu là sai dinh
-// dưỡng món người dùng đã soạn (cùng lý do với bài tập trong giáo án). FK RESTRICT là lưới cuối.
+// Đang là nguyên liệu của món / nằm trong thực đơn ⇒ 409, KHÔNG tự gỡ: âm thầm làm hụt là sai
+// dinh dưỡng thứ người dùng đã soạn (cùng lý do với bài tập trong giáo án). FK RESTRICT là lưới
+// cuối. Nhật ký ăn là snapshot nên không chặn.
 export async function deleteFood(id: number): Promise<FoodDetailComputed> {
 	const dto = await getFood(id);
 	if (dto.dishes.length > 0) {
 		throw createError({
 			statusCode: 409,
 			message: `Thực phẩm đang là nguyên liệu của ${dto.dishes.length} món — gỡ khỏi món hoặc lưu trữ thay vì xoá`,
+		});
+	}
+	const menuCount = await repo.countMenuUsage(id);
+	if (menuCount > 0) {
+		throw createError({
+			statusCode: 409,
+			message: `Thực phẩm đang nằm trong ${menuCount} thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá`,
 		});
 	}
 	await repo.removeFood(id);

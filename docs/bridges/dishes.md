@@ -70,7 +70,7 @@ Số thực không làm tròn ở API (VD `21.413999999999998`) — FE định d
 | POST | `/api/dishes` | `{ name, category, servings, description?, cookedWeightG?, ingredients: [{ foodId, grams }] (1–40) }` — `source` luôn `'user'` | `DishDetailDTO` |
 | GET | `/api/dishes/:id` | | `DishDetailDTO` |
 | PATCH | `/api/dishes/:id` | mọi field của POST + `isArchived`, ít nhất 1 field. `ingredients` có mặt ⇒ **thay toàn bộ** (thứ tự = thứ tự mảng, cùng batch với UPDATE) | `DishDetailDTO` |
-| DELETE | `/api/dishes/:id` | | `DishDetailDTO` (trước khi xoá) — nguyên liệu đi theo |
+| DELETE | `/api/dishes/:id` | | `DishDetailDTO` (trước khi xoá) — nguyên liệu đi theo. Đang nằm trong thực đơn ⇒ 409; nằm trong nhật ký thì không chặn (snapshot, `dishId` về null) |
 
 ## Lỗi
 
@@ -81,6 +81,7 @@ Số thực không làm tròn ở API (VD `21.413999999999998`) — FE định d
 | 400 | Thêm **mới** thực phẩm đã lưu trữ (thực phẩm có sẵn trong món rồi mới lưu trữ thì vẫn giữ được khi sửa) | `Thực phẩm "…" đã lưu trữ — khôi phục trước khi thêm` |
 | 404 | id không tồn tại | `Món ăn không tồn tại` |
 | 409 | Trùng tên (không phân biệt hoa thường) | `Đã có món tên "Cơm ức gà"` |
+| 409 | Xoá món đang nằm trong thực đơn | `Món đang nằm trong 1 thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá` |
 
 Phía thực phẩm: `DELETE /api/foods/:id` đang là nguyên liệu ⇒ **409** `Thực phẩm đang là nguyên liệu của 2 món — gỡ khỏi món hoặc lưu trữ thay vì xoá`; `FoodDetailDTO.dishes` liệt kê các món đó.
 

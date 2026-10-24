@@ -91,7 +91,7 @@ Thao tác trên một thực phẩm / khẩu phần trả `FoodDetailDTO` mới 
 | 404 | id không tồn tại / không thuộc thực phẩm | `Thực phẩm không tồn tại` · `Nhóm thực phẩm không tồn tại` · `Khẩu phần không tồn tại` |
 | 409 | Trùng tên thực phẩm (không phân biệt hoa thường) | `Đã có thực phẩm tên "Gà rán KFC (miếng đùi)"` |
 | 409 | Trùng tên nhóm trong cùng nhóm cha | `Đã có nhóm tên "Gà"` |
-| 409 | Xoá thực phẩm đang là nguyên liệu của món | `Thực phẩm đang là nguyên liệu của 2 món — gỡ khỏi món hoặc lưu trữ thay vì xoá` |
+| 409 | Xoá thực phẩm đang là nguyên liệu của món / nằm trong thực đơn | `Thực phẩm đang là nguyên liệu của 2 món — gỡ khỏi món hoặc lưu trữ thay vì xoá` · `Thực phẩm đang nằm trong 1 thực đơn — …` |
 | 409 | Xoá nhóm còn loại con / còn thực phẩm (kể cả đã lưu trữ) | `Nhóm còn loại con — xoá hoặc chuyển các loại con trước` · `Nhóm còn 1 thực phẩm — chuyển sang nhóm khác trước khi xoá` |
 
 ## Callout FE

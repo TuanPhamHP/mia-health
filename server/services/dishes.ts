@@ -134,8 +134,24 @@ export async function editDish(id: number, data: UpdateDishInput): Promise<DishD
 	return getDish(id);
 }
 
+/** Dinh dưỡng (tính live) của nhiều món — cho thực đơn / nhật ký ăn. */
+export async function nutritionByIds(ids: number[]): Promise<Map<number, { dish: Dish; nutrition: DishNutritionDTO }>> {
+	const rows = await repo.listDishesByIds([...new Set(ids)]);
+	const byDish = groupByDish(await repo.listIngredients(rows.map((d) => d.id)));
+	return new Map(rows.map((d) => [d.id, { dish: d, nutrition: nutritionOf(d, byDish.get(d.id) ?? []) }]));
+}
+
+// Đang nằm trong thực đơn ⇒ 409 (thực đơn tham chiếu live, xoá là làm hụt thực đơn). Nhật ký
+// đã ăn là snapshot nên không chặn — FK về NULL, tên + dinh dưỡng vẫn giữ.
 export async function deleteDish(id: number): Promise<DishDetailComputed> {
 	const dto = await getDish(id);
+	const menuCount = await repo.countMenuUsage(id);
+	if (menuCount > 0) {
+		throw createError({
+			statusCode: 409,
+			message: `Món đang nằm trong ${menuCount} thực đơn — gỡ khỏi thực đơn hoặc lưu trữ thay vì xoá`,
+		});
+	}
 	await repo.removeDish(id);
 	return dto;
 }

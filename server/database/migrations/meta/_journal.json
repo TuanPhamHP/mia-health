@@ -57,6 +57,20 @@
       "when": 1792807159321,
       "tag": "0007_seed_dishes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792809985442,
+      "tag": "0008_serious_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792810823986,
+      "tag": "0009_secret_karma",
+      "breakpoints": true
     }
   ]
 }

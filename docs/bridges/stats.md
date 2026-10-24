@@ -59,4 +59,10 @@ GET    /api/food-categories      POST /api/food-categories  PATCH|DELETE /api/fo
 GET    /api/foods?categoryId=&q= POST /api/foods            GET|PATCH|DELETE /api/foods/:id
 POST   /api/foods/:id/portions   PATCH|DELETE /api/foods/:id/portions/:portionId
 GET    /api/dishes?category=&q=  POST /api/dishes           GET|PATCH|DELETE /api/dishes/:id
+GET    /api/meal-log?date=       POST /api/meal-log/entries PATCH|DELETE /api/meal-log/entries/:id
+POST   /api/meal-log/apply-menu  GET|PUT /api/nutrition-targets
+GET    /api/menus                POST /api/menus            POST /api/menus/from-day   GET|PATCH|DELETE /api/menus/:id
+GET    /api/meal-log/suggestions?date=
+GET    /api/body?today=          PUT /api/body/profile      POST /api/body/weights     DELETE /api/body/weights/:id?today=
+POST   /api/body/apply-targets
 ```

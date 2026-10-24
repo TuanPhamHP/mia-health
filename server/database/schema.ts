@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 // ---------------------------------------------------------------------------
@@ -399,8 +399,9 @@ export type FoodSource = (typeof FOOD_SOURCES)[number];
 // Số liệu dinh dưỡng là REAL: giá trị đo có sai số phân tích sẵn (±10%), không phải dữ liệu
 // cần chính xác như thời lượng. NULL = bảng nguồn không có số liệu — KHÁC 0, UI hiện "—".
 // Glucid = carbohydrate KHÔNG gồm xơ (chuẩn Codex, như bảng VN); số USDA đã trừ xơ khi nhập.
-// Thứ tự cột khớp NUTRIENTS ở shared/utils/nutrients.ts.
-const nutrientColumns = {
+// Thứ tự cột khớp NUTRIENTS ở shared/utils/nutrients.ts. Hàm (không phải object) để mỗi bảng
+// có bộ column builder riêng — dùng chung cho foods và meal_entries (snapshot).
+const nutrientColumns = () => ({
 	energyKcal: real('energy_kcal').notNull(),
 	waterG: real('water_g'),
 	proteinG: real('protein_g'),
@@ -430,7 +431,7 @@ const nutrientColumns = {
 	vitaminCMg: real('vitamin_c_mg'),
 	vitaminDUg: real('vitamin_d_ug'),
 	vitaminEMg: real('vitamin_e_mg'),
-};
+});
 
 export const foods = sqliteTable(
 	'foods',
@@ -446,7 +447,7 @@ export const foods = sqliteTable(
 		sourceName: text('source_name'), // tên gốc trong bảng nguồn (tiếng Anh)
 		refusePct: real('refuse_pct'), // % thải bỏ khi mua (xương, vỏ…) — số liệu tính trên phần ăn được
 		note: text('note'),
-		...nutrientColumns,
+		...nutrientColumns(),
 		isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
@@ -539,3 +540,155 @@ export const dishIngredients = sqliteTable(
 
 export type DishIngredient = typeof dishIngredients.$inferSelect;
 export type NewDishIngredient = typeof dishIngredients.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Thực đơn (mẫu tái dùng) + nhật ký ăn theo ngày
+// ---------------------------------------------------------------------------
+
+export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
+export type Meal = (typeof MEALS)[number];
+
+//   serving — số phần của món (dinh dưỡng 1 phần = công thức / servings)
+//   g       — gam: thực phẩm (phần ăn được), hoặc món chín đã cân cả nồi (`cooked_weight_g`)
+export const ENTRY_UNITS = ['serving', 'g'] as const;
+export type EntryUnit = (typeof ENTRY_UNITS)[number];
+
+export const menus = sqliteTable(
+	'menus',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		name: text('name').notNull(),
+		description: text('description'),
+		isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [uniqueIndex('menus_name_unique').on(t.name)],
+);
+
+export type Menu = typeof menus.$inferSelect;
+export type NewMenu = typeof menus.$inferInsert;
+
+// Thực đơn THAM CHIẾU món / thực phẩm (dinh dưỡng tính live) — áp dụng vào ngày thì mới chụp
+// snapshot sang meal_entries. RESTRICT: xoá món / thực phẩm đang nằm trong thực đơn ⇒ 409.
+export const menuItems = sqliteTable(
+	'menu_items',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		menuId: integer('menu_id')
+			.notNull()
+			.references(() => menus.id, { onDelete: 'cascade' }),
+		meal: text('meal', { enum: MEALS }).notNull(),
+		position: integer('position').notNull().default(0),
+		dishId: integer('dish_id').references(() => dishes.id, { onDelete: 'restrict' }),
+		foodId: integer('food_id').references(() => foods.id, { onDelete: 'restrict' }),
+		amount: real('amount').notNull(),
+		unit: text('unit', { enum: ENTRY_UNITS }).notNull(),
+		portionLabel: text('portion_label'), // "1 bát con" — chỉ để hiển thị, `amount` đã quy ra gam
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [
+		index('menu_items_menu_idx').on(t.menuId),
+		index('menu_items_dish_idx').on(t.dishId),
+		index('menu_items_food_idx').on(t.foodId),
+		check('menu_items_one_target', sql`(${t.dishId} IS NULL) <> (${t.foodId} IS NULL)`),
+	],
+);
+
+export type MenuItem = typeof menuItems.$inferSelect;
+export type NewMenuItem = typeof menuItems.$inferInsert;
+
+// Một dòng đã ăn. Dinh dưỡng là SNAPSHOT lúc ghi (như session_entries của buổi tập): sửa công
+// thức / thực phẩm về sau KHÔNG viết lại những gì đã ăn. Xoá món / thực phẩm ⇒ FK về NULL,
+// tên + dinh dưỡng vẫn giữ.
+export const mealEntries = sqliteTable(
+	'meal_entries',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		date: text('date').notNull(), // 'YYYY-MM-DD' giờ địa phương do client gửi
+		meal: text('meal', { enum: MEALS }).notNull(),
+		position: integer('position').notNull().default(0),
+		dishId: integer('dish_id').references(() => dishes.id, { onDelete: 'set null' }),
+		foodId: integer('food_id').references(() => foods.id, { onDelete: 'set null' }),
+		name: text('name').notNull(), // snapshot tên món / thực phẩm
+		amount: real('amount').notNull(),
+		unit: text('unit', { enum: ENTRY_UNITS }).notNull(),
+		portionLabel: text('portion_label'),
+		...nutrientColumns(), // cho đúng lượng đã ăn
+		// Chất có nguyên liệu thiếu số liệu (giá trị là mức tối thiểu), phân cách bằng dấu phẩy; null = không.
+		missing: text('missing'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [index('meal_entries_date_idx').on(t.date)],
+);
+
+export type MealEntry = typeof mealEntries.$inferSelect;
+export type NewMealEntry = typeof mealEntries.$inferInsert;
+
+// Mục tiêu dinh dưỡng mỗi ngày — một dòng duy nhất (id = 1, app một người dùng). Chưa có dòng
+// ⇒ service trả mặc định. Phần BMI / TDEE sẽ tính gợi ý rồi ghi vào đây.
+export const nutritionTargets = sqliteTable('nutrition_targets', {
+	id: integer('id').primaryKey(),
+	energyKcal: real('energy_kcal').notNull(),
+	proteinG: real('protein_g'),
+	fatG: real('fat_g'),
+	carbG: real('carb_g'),
+	fiberG: real('fiber_g'),
+	sodiumMg: real('sodium_mg'), // mức TỐI ĐA, không phải mục tiêu cần đạt
+	updatedAt: integer('updated_at', { mode: 'timestamp' }),
+});
+
+export type NutritionTarget = typeof nutritionTargets.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Chỉ số cơ thể: hồ sơ (một dòng) + nhật ký cân nặng ⇒ BMI, BMR, TDEE, mục tiêu dinh dưỡng
+// ---------------------------------------------------------------------------
+
+export const SEXES = ['male', 'female'] as const;
+export type Sex = (typeof SEXES)[number];
+
+// Hệ số nhân BMR (shared/utils/body.ts): 1,2 · 1,375 · 1,55 · 1,725 · 1,9.
+export const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'active', 'very_active'] as const;
+export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number];
+
+export const WEIGHT_GOALS = ['lose', 'maintain', 'gain'] as const;
+export type WeightGoal = (typeof WEIGHT_GOALS)[number];
+
+// Một dòng duy nhất (id = 1, app một người dùng). Tuổi tính từ năm sinh + ngày client gửi.
+export const bodyProfile = sqliteTable('body_profile', {
+	id: integer('id').primaryKey(),
+	sex: text('sex', { enum: SEXES }).notNull(),
+	birthYear: integer('birth_year').notNull(),
+	heightCm: real('height_cm').notNull(),
+	activityLevel: text('activity_level', { enum: ACTIVITY_LEVELS }).notNull(),
+	goal: text('goal', { enum: WEIGHT_GOALS }).notNull(),
+	goalRateKg: real('goal_rate_kg').notNull().default(0.5), // kg / tuần — giảm hoặc tăng theo `goal`
+	targetWeightKg: real('target_weight_kg'),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }),
+});
+
+export type BodyProfile = typeof bodyProfile.$inferSelect;
+
+// Mỗi ngày một lần cân (cân lại trong ngày = ghi đè). Ngày do client gửi, giờ địa phương.
+export const bodyWeights = sqliteTable(
+	'body_weights',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		date: text('date').notNull(),
+		weightKg: real('weight_kg').notNull(),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [uniqueIndex('body_weights_date_unique').on(t.date)],
+);
+
+export type BodyWeight = typeof bodyWeights.$inferSelect;

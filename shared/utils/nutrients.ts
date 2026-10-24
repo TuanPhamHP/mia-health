@@ -61,14 +61,18 @@ export const NUTRIENT_KEYS = NUTRIENTS.map((n) => n.key) as NutrientKey[];
 /** Số liệu trên 100 g phần ăn được. null = nguồn không có số liệu (khác 0). */
 export type NutrientValues = { energyKcal: number } & { [K in Exclude<NutrientKey, 'energyKcal'>]: number | null };
 
-/** Nhân mọi chất với `factor` — null giữ nguyên null (không biết thì vẫn không biết). */
+/**
+ * Nhân mọi chất với `factor` — null giữ nguyên null (không biết thì vẫn không biết). Chỉ trả
+ * ĐÚNG các khoá dinh dưỡng: truyền cả bản ghi thực phẩm vào thì `id`, `name`… không lọt ra
+ * (từng làm snapshot nhật ký mang id của thực phẩm).
+ */
 export function multiplyNutrients(values: NutrientValues, factor: number): NutrientValues {
-	const out = { ...values };
+	const out = {} as Record<NutrientKey, number | null>;
 	for (const key of NUTRIENT_KEYS) {
 		const v = values[key];
-		(out as Record<NutrientKey, number | null>)[key] = v === null ? null : v * factor;
+		out[key] = v === null ? null : v * factor;
 	}
-	return out;
+	return out as NutrientValues;
 }
 
 /** Giá trị cho `grams` gam phần ăn được, từ số liệu trên 100 g. */

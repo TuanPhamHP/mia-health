@@ -6,7 +6,7 @@
 
 ## 1. Bối cảnh dự án
 
-**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần. Kèm **module dinh dưỡng** (tab "Ăn uống", làm từng phần): ① kho thực phẩm có đủ nutrition facts — ĐÃ CÓ; ② món ăn = công thức từ thực phẩm — ĐÃ CÓ; ③ thực đơn + nhật ký ăn (khối lượng, kcal, các chất); ④ BMI, TDEE, gợi ý món.
+**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần. Kèm **module dinh dưỡng** (tab "Ăn uống", làm từng phần): ① kho thực phẩm có đủ nutrition facts — ĐÃ CÓ; ② món ăn = công thức từ thực phẩm — ĐÃ CÓ; ③ thực đơn + nhật ký ăn (khối lượng, kcal, các chất) — ĐÃ CÓ; ④ cân nặng, BMI, TDEE ⇒ mục tiêu, gợi ý món — ĐÃ CÓ.
 
 - Tách ra từ **mia-finance** (cùng stack, cùng kiến trúc) — app riêng, D1 riêng, deploy riêng. Lý do tách thay vì gộp: dữ liệu tài chính cách ly hoàn toàn, không phải tái cấu trúc 480 file route gốc của finance, mỗi app một icon PWA. Khi có app thứ 3 mới cân nhắc gom phần hạ tầng chung (auth, layout, CSS kính, `useDB`) thành Nuxt Layer.
 - Quy mô: **solo / single-user**, dữ liệu nhỏ.
@@ -25,6 +25,9 @@ Domain model:
 - `stats` — streak, tuần, heatmap, theo nhóm (không có bảng riêng, aggregate từ sessions).
 - `food_categories` + `foods` + `food_portions` — kho thực phẩm: cây nhóm 2 cấp (Thịt → Gà), thực phẩm với 29 chất trên 100 g phần ăn được, khẩu phần quen dùng ("1 bát con" = 150 g).
 - `dishes` + `dish_ingredients` — món ăn = công thức: thực phẩm + gam phần ăn được cho cả công thức, nấu cho `servings` phần. Dinh dưỡng không lưu, luôn tính từ thực phẩm.
+- `meal_entries` — nhật ký ăn theo ngày + bữa: món (theo phần / gam món chín) hoặc thực phẩm (theo gam), dinh dưỡng SNAPSHOT lúc ghi.
+- `menus` + `menu_items` — thực đơn một ngày (tham chiếu live món / thực phẩm), áp vào nhật ký bằng một chạm. `nutrition_targets` — mục tiêu ngày (một dòng).
+- `body_profile` (một dòng) + `body_weights` (một lần cân / ngày) — hồ sơ cơ thể; BMI / BMR / TDEE / mục tiêu đề xuất tính khi đọc (`shared/utils/body.ts`), không lưu.
 
 ## 2. Tech stack (ĐÃ KHOÁ — không tự ý đổi)
 
@@ -179,7 +182,17 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Món ăn = công thức, dinh dưỡng KHÔNG lưu, luôn tính từ thực phẩm** (`sumNutrients` / `multiplyNutrients`, có vitest): sửa thực phẩm là mọi món dùng nó đổi theo (như bài kết hợp lấy bài con live). Nguyên liệu = gam phần ăn được cho cả công thức; nấu hao nước nhưng chất gần như giữ nguyên ⇒ tổng = cộng nguyên liệu, bỏ qua hao hụt vitamin; dầu rán = lượng ngấm. Nguyên liệu thiếu số liệu một chất ⇒ cộng phần biết được + `missing` ⇒ UI hiện "≥" — KHÔNG coi null là 0, kể cả với hành lá vài gam: cùng luật đó sẽ biến nước mắm thiếu số natri thành 0 natri.
 - **Món mẫu: công thức ƯỚC LƯỢNG, kcal đối chiếu nguồn công bố** (Viện Dinh dưỡng qua báo chí, bảng Nutrihome; `build-dishes.mjs` cảnh báo lệch > 30%). Không có nguồn công bố công thức chuẩn — ghi rõ "ước lượng" ở UI. Migration trỏ thực phẩm qua `(source, source_code)`, bền với đổi tên.
 - **Xoá thực phẩm đang là nguyên liệu ⇒ 409** (FK `dish_ingredients.food_id` RESTRICT là lưới cuối); thực phẩm lưu trữ sau khi đã vào món vẫn giữ được khi sửa món, chỉ chặn thêm mới.
-- **Tab "Ăn uống" = Món ăn | Thực phẩm** (`MealsTabs`), mở vào Món ăn.
+- **Nhật ký ăn là SNAPSHOT, thực đơn là LIVE** — như lịch sử buổi tập vs giáo án: sửa công thức / thực phẩm không viết lại ngày đã ăn; thực đơn luôn theo công thức hiện tại, áp vào ngày nào mới chụp snapshot. Đổi lượng một dòng nhật ký ⇒ nhân snapshot theo tỉ lệ, KHÔNG lấy lại từ thư viện. Xoá món / thực phẩm ⇒ FK nhật ký về NULL (tên + số giữ); đang nằm trong thực đơn ⇒ 409.
+- **Một dòng = đúng MỘT món hoặc MỘT thực phẩm** (CHECK `menu_items_one_target`); thực phẩm luôn theo gam (phần ăn được), món theo phần hoặc gam món chín (chỉ khi đã cân `cookedWeightG`). Khẩu phần ("1 bát con") quy ra gam ở client, `portionLabel` chỉ để hiển thị.
+- **`multiplyNutrients` / `scaleNutrients` chỉ trả đúng khoá dinh dưỡng** — truyền cả bản ghi thực phẩm vào từng làm `id` của thực phẩm lọt vào snapshot nhật ký (đè khoá chính). Có vitest khoá lại.
+- **Mục tiêu dinh dưỡng một dòng `id = 1`**; chưa đặt ⇒ 2.000 kcal, xơ 28 g (FDA), natri ≤ 2.000 mg (WHO); natri là mức TỐI ĐA. Đạm / béo / glucid để trống tới khi người dùng tự đặt hoặc áp mục tiêu từ trang Cơ thể.
+- **Tab "Ăn uống" = Nhật ký | Thực đơn | Món ăn | Thực phẩm | Cơ thể** (`MealsTabs`), mở vào Nhật ký.
+- **BMI phân loại theo ngưỡng CHÂU Á** (WHO WPRO 2000, Bộ Y tế VN dùng): thừa cân từ 23, béo phì từ 25 — không dùng 25 / 30 toàn cầu. Người châu Á tích mỡ nội tạng ở BMI thấp hơn.
+- **BMR = Mifflin-St Jeor, TDEE = BMR × hệ số 1,2 → 1,9.** Mục tiêu kcal = TDEE ± tốc độ × 7.700 / 7; giảm cân có **sàn** max(BMR, 1.500 nam / 1.200 nữ) — chạm sàn thì báo `floorApplied`, không âm thầm ăn dưới mức an toàn. Đạm 1,8 g/kg khi giảm / tăng, 1,6 g/kg khi giữ; béo 27% năng lượng; glucid phần còn lại; xơ 14 g / 1.000 kcal; natri ≤ 2.000 mg. Pure function có vitest (`shared/utils/__tests__/body.test.ts`).
+- **Chỉ số cơ thể không lưu, mục tiêu đề xuất không tự ghi**: BMI / TDEE tính mỗi lần đọc từ hồ sơ + lần cân mới nhất; chỉ khi bấm "Áp dụng" (`POST /api/body/apply-targets`) mới ghi vào `nutrition_targets` — cân lại không âm thầm đè mục tiêu người dùng đã tự chỉnh.
+- **Tuổi = năm của `today` (client gửi) − năm sinh** — chỉ lưu năm sinh (đủ chính xác cho Mifflin, sai số ±5 kcal), server không tự lấy "hôm nay".
+- **Một lần cân mỗi ngày** (unique `date`), cân lại trong ngày ⇒ ghi đè (upsert) — chênh lệch giữa các lần cân không bị nhiễu bởi nhiều lần cân trong một ngày.
+- **Gợi ý món = chấm điểm pure** (`shared/utils/suggest.ts`): ngân sách một bữa ≤ 700 kcal (còn 1.500 kcal không có nghĩa nên ăn một món 1.500 kcal); còn thiếu đạm ⇒ ưu tiên mật độ đạm; còn < 150 kcal ⇒ chỉ món nhẹ; món đã ăn trong ngày xuống cuối. Chỉ hiện cho hôm nay; "+" thêm 1 phần vào bữa theo giờ (`mealForNow`).
 - **Nhóm thực phẩm 2 cấp, theo con vật / loại** (Thịt → Gà gồm cả ức, đùi, cánh, gan, mề…) — nhóm gốc khớp 14 nhóm của bảng VN. Xoá nhóm còn loại con / thực phẩm ⇒ 409 (FK RESTRICT là lưới cuối).
 - **Tab dưới: Hôm nay · Kế hoạch (Chương trình | Giáo án | Bài tập) · [Tập] · Ăn uống · Lịch sử** — thư viện bài tập vào trong Kế hoạch để nhường chỗ cho Ăn uống.
 - **PWA — ba điều kiện để "Thêm vào màn hình chính" chạy đúng** (đã kiểm bằng build production + `wrangler pages dev` + Chrome: installability không lỗi, SW kiểm soát trang, offline mở được app):
@@ -214,5 +227,7 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 | Programs (chương trình, giai đoạn, lịch) + Plan (lịch ngày, bỏ qua / đổi / thêm buổi) | `docs/bridges/programs.md` |
 | Foods (kho thực phẩm, nhóm, khẩu phần, nguồn số liệu) | `docs/bridges/foods.md` |
 | Dishes (món ăn = công thức, dinh dưỡng tính từ nguyên liệu, món mẫu) | `docs/bridges/dishes.md` |
+| Meals (nhật ký ăn, thực đơn, mục tiêu dinh dưỡng) | `docs/bridges/meals.md` |
+| Body (hồ sơ, cân nặng, BMI / TDEE, mục tiêu đề xuất, gợi ý món) | `docs/bridges/body.md` |
 
 **Quy trình bridge-doc cuốn chiếu** (giữ nguyên từ mia-finance): xong backend một module ⇒ viết/cập nhật bridge-doc NGAY trong cùng đợt, shape lấy từ response thật (`yarn dev` + curl), không bịa từ đọc code.

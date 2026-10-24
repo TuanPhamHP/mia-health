@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { dishes, dishIngredients, foodCategories, foodPortions, foods } from '../database/schema';
+import { dishes, dishIngredients, foodCategories, foodPortions, foods, menuItems } from '../database/schema';
 import type { NewFood, NewFoodCategory, NewFoodPortion } from '../database/schema';
 
 // --- Nhóm / loại ---
@@ -94,6 +94,15 @@ export function listDishUsage(foodId: number) {
 		.innerJoin(dishes, eq(dishes.id, dishIngredients.dishId))
 		.where(eq(dishIngredients.foodId, foodId))
 		.orderBy(asc(dishes.name));
+}
+
+/** Số thực đơn (khác nhau) dùng thẳng thực phẩm (không qua món). */
+export async function countMenuUsage(foodId: number): Promise<number> {
+	const rows = await useDB()
+		.selectDistinct({ menuId: menuItems.menuId })
+		.from(menuItems)
+		.where(eq(menuItems.foodId, foodId));
+	return rows.length;
 }
 
 // Trả cả id để service so tên không phân biệt hoa thường bằng JS (lower() của SQLite chỉ hạ ASCII).

@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { dishes, dishIngredients, foods } from '../database/schema';
+import { dishes, dishIngredients, foods, menuItems } from '../database/schema';
 import type { DishCategory, NewDish } from '../database/schema';
 import { NUTRIENT_KEYS } from '../../shared/utils/nutrients';
 import type { NutrientKey } from '../../shared/utils/nutrients';
@@ -20,6 +20,24 @@ export function listDishes(filter: { category?: DishCategory; includeArchived?: 
 export async function getDishById(id: number) {
 	const rows = await useDB().select().from(dishes).where(eq(dishes.id, id)).limit(1);
 	return rows[0] ?? null;
+}
+
+export async function listDishesByIds(ids: number[]) {
+	if (ids.length === 0) return [];
+	const db = useDB();
+	const parts = await Promise.all(
+		chunk(ids, D1_MAX_PARAMS - 10).map((part) => db.select().from(dishes).where(inArray(dishes.id, part))),
+	);
+	return parts.flat();
+}
+
+/** Số thực đơn (khác nhau) đang dùng món. */
+export async function countMenuUsage(dishId: number): Promise<number> {
+	const rows = await useDB()
+		.selectDistinct({ menuId: menuItems.menuId })
+		.from(menuItems)
+		.where(eq(menuItems.dishId, dishId));
+	return rows.length;
 }
 
 // Trả cả id để service so tên không phân biệt hoa thường bằng JS.

@@ -16,6 +16,11 @@ describe('scaleNutrients', () => {
 		expect(out.fatG).toBeCloseTo(3.93);
 	});
 
+	it('chỉ trả khoá dinh dưỡng — id / tên của bản ghi thực phẩm không lọt ra', () => {
+		const food = { ...values({ energyKcal: 100 }), id: 563, name: 'Cơm trắng' };
+		expect(Object.keys(scaleNutrients(food, 150)).sort()).toEqual([...NUTRIENT_KEYS].sort());
+	});
+
 	it('không có số liệu (null) vẫn là null — không biến thành 0', () => {
 		expect(scaleNutrients(values({ energyKcal: 50 }), 200).sugarG).toBeNull();
 	});
