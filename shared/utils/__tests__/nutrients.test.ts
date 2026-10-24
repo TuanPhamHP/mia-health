@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NUTRIENT_KEYS, NUTRIENTS, scaleNutrients } from '../nutrients';
+import { NUTRIENT_KEYS, NUTRIENTS, scaleNutrients, sumNutrients } from '../nutrients';
 import type { NutrientValues } from '../nutrients';
 import { foldText } from '../text';
 
@@ -18,6 +18,23 @@ describe('scaleNutrients', () => {
 
 	it('không có số liệu (null) vẫn là null — không biến thành 0', () => {
 		expect(scaleNutrients(values({ energyKcal: 50 }), 200).sugarG).toBeNull();
+	});
+});
+
+describe('sumNutrients', () => {
+	it('cộng các phần; chất có phần thiếu số liệu ⇒ cộng phần biết được + đánh dấu missing', () => {
+		const total = sumNutrients([values({ energyKcal: 100, proteinG: 10, sodiumMg: 50 }), values({ energyKcal: 30, proteinG: 2 })]);
+		expect(total.values.energyKcal).toBe(130);
+		expect(total.values.proteinG).toBe(12);
+		expect(total.values.sodiumMg).toBe(50);
+		expect(total.missing).toEqual(['sodiumMg']);
+	});
+
+	it('mọi phần đều thiếu ⇒ null, không tính là missing; không có phần nào ⇒ 0 kcal', () => {
+		const total = sumNutrients([values({ energyKcal: 10 }), values({ energyKcal: 20 })]);
+		expect(total.values.vitaminCMg).toBeNull();
+		expect(total.missing).toEqual([]);
+		expect(sumNutrients([]).values.energyKcal).toBe(0);
 	});
 });
 

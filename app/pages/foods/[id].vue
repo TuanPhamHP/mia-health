@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import type { AddFoodPortionInput, CreateFoodInput, FoodPortionDTO } from '#shared/types/foods';
+	import { scaleNutrients } from '#shared/utils/nutrients';
 	import { FOOD_SOURCE_LABELS, formatAmount, sourceCodeLabel } from '~/utils/foods';
 
 	const route = useRoute();
@@ -133,6 +134,15 @@
 						</span>
 					</p>
 					<p v-if="food.note" class="text-(--ui-text-highlighted)">{{ food.note }}</p>
+					<p v-if="food.dishes.length > 0" class="flex gap-1.5">
+						<UIcon name="i-heroicons-cake" class="mt-0.5 size-3.5 shrink-0" />
+						<span>
+							Nguyên liệu của:
+							<template v-for="(d, i) in food.dishes" :key="d.id"
+								>{{ i > 0 ? ', ' : '' }}<NuxtLink :to="`/dishes/${d.id}`" class="text-(--ui-primary)">{{ d.name }}</NuxtLink></template
+							>
+						</span>
+					</p>
 				</div>
 				<div v-if="edited || food.isArchived" class="mt-2 flex flex-wrap gap-1.5">
 					<UBadge v-if="edited" color="warning" variant="soft" size="sm">Đã sửa so với bảng gốc</UBadge>
@@ -158,7 +168,7 @@
 				<UFormField label="Hoặc nhập số gam phần ăn được" class="mb-3">
 					<UInputNumber v-model="grams" :min="1" :max="5000" :step="10" class="w-full" />
 				</UFormField>
-				<NutritionLabel :per100g="food" :grams="grams ?? 100" />
+				<NutritionLabel :values="scaleNutrients(food, grams ?? 100)" />
 			</UCard>
 
 			<UCard>

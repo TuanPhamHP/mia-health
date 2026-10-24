@@ -61,13 +61,39 @@ export const NUTRIENT_KEYS = NUTRIENTS.map((n) => n.key) as NutrientKey[];
 /** Số liệu trên 100 g phần ăn được. null = nguồn không có số liệu (khác 0). */
 export type NutrientValues = { energyKcal: number } & { [K in Exclude<NutrientKey, 'energyKcal'>]: number | null };
 
-/** Giá trị cho `grams` gam phần ăn được — null giữ nguyên null (không biết thì vẫn không biết). */
-export function scaleNutrients(per100g: NutrientValues, grams: number): NutrientValues {
-	const factor = grams / 100;
-	const out = { ...per100g };
+/** Nhân mọi chất với `factor` — null giữ nguyên null (không biết thì vẫn không biết). */
+export function multiplyNutrients(values: NutrientValues, factor: number): NutrientValues {
+	const out = { ...values };
 	for (const key of NUTRIENT_KEYS) {
-		const v = per100g[key];
+		const v = values[key];
 		(out as Record<NutrientKey, number | null>)[key] = v === null ? null : v * factor;
 	}
 	return out;
+}
+
+/** Giá trị cho `grams` gam phần ăn được, từ số liệu trên 100 g. */
+export function scaleNutrients(per100g: NutrientValues, grams: number): NutrientValues {
+	return multiplyNutrients(per100g, grams / 100);
+}
+
+export interface NutrientTotal {
+	values: NutrientValues;
+	/**
+	 * Chất có ÍT NHẤT MỘT phần thiếu số liệu (nhưng phần khác có): `values` chỉ cộng phần biết
+	 * được ⇒ giá trị thật có thể cao hơn, UI hiện "≥". Mọi phần đều thiếu ⇒ null, không nằm ở đây.
+	 */
+	missing: NutrientKey[];
+}
+
+/** Cộng dinh dưỡng nhiều phần (nguyên liệu của món, các món trong bữa…). */
+export function sumNutrients(parts: readonly NutrientValues[]): NutrientTotal {
+	const values = { energyKcal: 0 } as NutrientValues;
+	const missing: NutrientKey[] = [];
+	for (const key of NUTRIENT_KEYS) {
+		const known = parts.map((p) => p[key]).filter((v): v is number => v !== null);
+		const sum = known.length === 0 ? null : known.reduce((a, b) => a + b, 0);
+		(values as Record<NutrientKey, number | null>)[key] = key === 'energyKcal' ? (sum ?? 0) : sum;
+		if (known.length > 0 && known.length < parts.length) missing.push(key);
+	}
+	return { values, missing };
 }

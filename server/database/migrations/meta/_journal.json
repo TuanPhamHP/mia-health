@@ -43,6 +43,20 @@
       "when": 1792805519100,
       "tag": "0005_seed_foods",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792807158830,
+      "tag": "0006_premium_old_lace",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792807159321,
+      "tag": "0007_seed_dishes",
+      "breakpoints": true
     }
   ]
 }

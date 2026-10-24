@@ -32,7 +32,7 @@ Không set → login luôn 500 ("Auth chưa được cấu hình") — fail-safe
 
 ### Kho thực phẩm
 
-Có sẵn sau `yarn db:migrate:local` — migration `0005_seed_foods.sql` nạp 573 thực phẩm (Bảng thành phần thực phẩm Việt Nam 2007 + USDA). Chỉ khi **sinh lại** dữ liệu từ nguồn gốc mới cần `pdftotext` (gói `poppler-utils`) và `unzip`: `node scripts/foods/build-foods.mjs <file-migration-mới.sql>` — xem `docs/bridges/foods.md`.
+Có sẵn sau `yarn db:migrate:local` — migration `0005_seed_foods.sql` nạp 573 thực phẩm (Bảng thành phần thực phẩm Việt Nam 2007 + USDA), `0007_seed_dishes.sql` nạp 56 món mẫu. Chỉ khi **sinh lại** dữ liệu mới cần: `pdftotext` (gói `poppler-utils`) + `unzip` cho `node scripts/foods/build-foods.mjs <file-migration-mới.sql>`; Node ≥ 22.5 (`node:sqlite`) cho `node scripts/foods/build-dishes.mjs <file-migration-mới.sql>` — xem `docs/bridges/foods.md`, `docs/bridges/dishes.md`.
 
 ## Phạm vi ảnh hưởng — local vs prod
 

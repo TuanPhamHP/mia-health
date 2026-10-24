@@ -123,15 +123,20 @@ async function assertFoodNameFree(name: string, exceptId?: number) {
 	if (clash) throw createError({ statusCode: 409, message: `Đã có thực phẩm tên "${clash.name}"` });
 }
 
+export function findFoods(ids: number[]): Promise<Food[]> {
+	return repo.listFoodsByIds([...new Set(ids)]);
+}
+
 export async function getFood(id: number): Promise<FoodDetailComputed> {
 	const food = await requireFood(id);
-	const [portions, categories] = await Promise.all([repo.listPortions(id), repo.listCategories()]);
+	const [portions, categories, dishes] = await Promise.all([repo.listPortions(id), repo.listCategories(), repo.listDishUsage(id)]);
 	const category = categories.find((c) => c.id === food.categoryId)!; // FK RESTRICT
 	const parent = category.parentId === null ? null : categories.find((c) => c.id === category.parentId) ?? null;
 	return {
 		...food,
 		portions,
 		category: { id: category.id, name: category.name, parent: parent ? { id: parent.id, name: parent.name } : null },
+		dishes,
 	};
 }
 
@@ -158,8 +163,16 @@ export async function editFood(id: number, data: UpdateFoodInput): Promise<FoodD
 	return getFood(id);
 }
 
+// Đang là nguyên liệu của món ⇒ 409, KHÔNG tự gỡ: âm thầm làm hụt nguyên liệu là sai dinh
+// dưỡng món người dùng đã soạn (cùng lý do với bài tập trong giáo án). FK RESTRICT là lưới cuối.
 export async function deleteFood(id: number): Promise<FoodDetailComputed> {
 	const dto = await getFood(id);
+	if (dto.dishes.length > 0) {
+		throw createError({
+			statusCode: 409,
+			message: `Thực phẩm đang là nguyên liệu của ${dto.dishes.length} món — gỡ khỏi món hoặc lưu trữ thay vì xoá`,
+		});
+	}
 	await repo.removeFood(id);
 	return dto;
 }

@@ -38,7 +38,7 @@
 				<UInput v-model="name" placeholder="VD: Kegel buổi sáng" class="w-full" :ui="{ base: 'text-base' }" />
 			</UFormField>
 
-			<UFormField label="Mô tả" hint="Vì sao có buổi này — hiện ở màn Hôm nay">
+			<UFormField label="Mô tả" description="Vì sao có buổi này — hiện ở màn Hôm nay">
 				<UTextarea v-model="description" :rows="2" autoresize class="w-full" />
 			</UFormField>
 

@@ -41,6 +41,7 @@ Kho ban đầu **573 thực phẩm**, nạp bằng migration dữ liệu `0005_s
 | 29 chất: `energyKcal` (luôn có) + `waterG`, `proteinG`, `fatG`, `satFatG`, `monoFatG`, `polyFatG`, `transFatG`, `cholesterolMg`, `carbG`, `fiberG`, `sugarG`, `sodiumMg`, `potassiumMg`, `calciumMg`, `phosphorusMg`, `magnesiumMg`, `ironMg`, `zincMg`, `vitaminAUg`, `vitaminB1Mg`, `vitaminB2Mg`, `niacinMg`, `vitaminB6Mg`, `folateUg`, `vitaminB12Ug`, `vitaminCMg`, `vitaminDUg`, `vitaminEMg` | number \| null |
 | `portions` | `{ id, foodId, name, grams, position, createdAt }[]` — gram phần ăn được |
 | `category` | `{ id, name, parent: { id, name } \| null }` |
+| `dishes` | `{ id, name }[]` — món đang dùng thực phẩm này làm nguyên liệu (xem bridge dishes) |
 | `updatedAt` | Khác null ở thực phẩm từ bảng nguồn ⇒ đã sửa, số liệu có thể khác bảng gốc |
 
 ```json
@@ -56,7 +57,8 @@ Kho ban đầu **573 thực phẩm**, nạp bằng migration dữ liệu `0005_s
     { "id": 1, "foodId": 563, "name": "1 bát con", "grams": 150, "position": 0, "createdAt": "2026-10-24T01:38:53.000Z" },
     { "id": 2, "foodId": 563, "name": "1 lưng bát", "grams": 100, "position": 1, "createdAt": "2026-10-24T01:38:53.000Z" }
   ],
-  "category": { "id": 16, "name": "Gạo & cơm", "parent": { "id": 15, "name": "Ngũ cốc & tinh bột" } }
+  "category": { "id": 16, "name": "Gạo & cơm", "parent": { "id": 15, "name": "Ngũ cốc & tinh bột" } },
+  "dishes": [{ "id": 44, "name": "Cơm rang trứng" }, { "id": 45, "name": "Cơm tấm sườn" }]
 }
 ```
 
@@ -74,7 +76,7 @@ Thao tác trên một thực phẩm / khẩu phần trả `FoodDetailDTO` mới 
 | POST | `/api/foods` | `{ name, categoryId, energyKcal, note?, refusePct?, …28 chất khác? }` — chất bỏ trống / null = không có số liệu; `source` luôn `'user'` | `FoodDetailDTO` |
 | GET | `/api/foods/:id` | | `FoodDetailDTO` |
 | PATCH | `/api/foods/:id` | mọi field của POST + `isArchived`, ít nhất 1 field. Sửa được cả thực phẩm từ bảng nguồn (`source` giữ nguyên) | `FoodDetailDTO` |
-| DELETE | `/api/foods/:id` | | `FoodDetailDTO` (trước khi xoá) — khẩu phần đi theo |
+| DELETE | `/api/foods/:id` | | `FoodDetailDTO` (trước khi xoá) — khẩu phần đi theo. Đang là nguyên liệu của món ⇒ 409 |
 | POST | `/api/foods/:id/portions` | `{ name, grams (0 < g ≤ 5000) }` | `FoodDetailDTO` |
 | PATCH | `/api/foods/:id/portions/:portionId` | `{ name?, grams? }` | `FoodDetailDTO` |
 | DELETE | `/api/foods/:id/portions/:portionId` | | `FoodDetailDTO` |
@@ -89,10 +91,11 @@ Thao tác trên một thực phẩm / khẩu phần trả `FoodDetailDTO` mới 
 | 404 | id không tồn tại / không thuộc thực phẩm | `Thực phẩm không tồn tại` · `Nhóm thực phẩm không tồn tại` · `Khẩu phần không tồn tại` |
 | 409 | Trùng tên thực phẩm (không phân biệt hoa thường) | `Đã có thực phẩm tên "Gà rán KFC (miếng đùi)"` |
 | 409 | Trùng tên nhóm trong cùng nhóm cha | `Đã có nhóm tên "Gà"` |
+| 409 | Xoá thực phẩm đang là nguyên liệu của món | `Thực phẩm đang là nguyên liệu của 2 món — gỡ khỏi món hoặc lưu trữ thay vì xoá` |
 | 409 | Xoá nhóm còn loại con / còn thực phẩm (kể cả đã lưu trữ) | `Nhóm còn loại con — xoá hoặc chuyển các loại con trước` · `Nhóm còn 1 thực phẩm — chuyển sang nhóm khác trước khi xoá` |
 
 ## Callout FE
 
-- Dinh dưỡng cho X gam: `scaleNutrients(food, grams)` — null giữ null.
+- Dinh dưỡng cho X gam: `scaleNutrients(food, grams)` — null giữ null. Nhiều phần cộng lại: `sumNutrients()` (trả kèm `missing`).
 - Glucid đã **không gồm xơ**: đừng trừ xơ lần nữa khi tính "net carb".
 - Danh sách không lọc trả hơn 500 dòng — trang Thực phẩm chỉ gọi khi đã chọn nhóm hoặc gõ tìm.

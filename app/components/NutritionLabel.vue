@@ -1,15 +1,16 @@
 <script setup lang="ts">
 	/**
-	 * Nhãn "Nutrition facts" cho `grams` gam phần ăn được. Số liệu gốc trên 100 g; "—" = nguồn
-	 * không có số liệu (khác 0 — không cộng bừa thành 0). %DV theo khẩu phần tham chiếu 2.000 kcal.
+	 * Nhãn "Nutrition facts" cho một lượng đã quy đổi sẵn (thực phẩm theo gam, món theo phần…).
+	 * "—" = nguồn không có số liệu (khác 0 — không cộng bừa thành 0); chất trong `missing` có
+	 * nguyên liệu thiếu số liệu ⇒ hiện "≥" (mức tối thiểu). %DV theo khẩu phần tham chiếu 2.000 kcal.
 	 */
-	import { NUTRIENTS, scaleNutrients } from '#shared/utils/nutrients';
-	import type { NutrientGroup, NutrientValues } from '#shared/utils/nutrients';
+	import { NUTRIENTS } from '#shared/utils/nutrients';
+	import type { NutrientGroup, NutrientKey, NutrientValues } from '#shared/utils/nutrients';
 	import { formatAmount } from '~/utils/foods';
 
-	const props = defineProps<{ per100g: NutrientValues; grams: number }>();
+	const props = defineProps<{ values: NutrientValues; missing?: readonly NutrientKey[] }>();
 
-	const values = computed(() => scaleNutrients(props.per100g, props.grams));
+	const missingSet = computed(() => new Set(props.missing ?? []));
 
 	const SECTIONS: { group: NutrientGroup; title: string | null }[] = [
 		{ group: 'macro', title: null },
@@ -19,11 +20,12 @@
 
 	const rows = (group: NutrientGroup) =>
 		NUTRIENTS.filter((n) => n.group === group).map((n) => {
-			const v = values.value[n.key];
+			const v = props.values[n.key];
 			const dv = 'dv' in n ? n.dv : undefined;
 			return {
 				...n,
 				sub: 'sub' in n && n.sub,
+				atLeast: missingSet.value.has(n.key),
 				value: v,
 				dvPct: v !== null && dv !== undefined ? Math.round((v / dv) * 100) : null,
 			};
@@ -31,7 +33,7 @@
 
 	// Tỉ lệ năng lượng từ đạm / béo / glucid (4 / 9 / 4) — chỉ khi đủ cả ba số liệu.
 	const energySplit = computed(() => {
-		const { proteinG, fatG, carbG } = props.per100g;
+		const { proteinG, fatG, carbG } = props.values;
 		if (proteinG === null || fatG === null || carbG === null) return null;
 		const parts = { protein: proteinG * 4, fat: fatG * 9, carb: carbG * 4 };
 		const total = parts.protein + parts.fat + parts.carb;
@@ -70,7 +72,7 @@
 					</dt>
 					<dd class="tabular-nums" :class="row.value === null ? 'text-(--ui-text-dimmed)' : 'text-(--ui-text-highlighted)'">
 						<template v-if="row.value === null">—</template>
-						<template v-else>{{ formatAmount(row.value) }} {{ row.unit }}</template>
+						<template v-else>{{ row.atLeast ? '≥ ' : '' }}{{ formatAmount(row.value) }} {{ row.unit }}</template>
 					</dd>
 					<dd class="w-10 shrink-0 text-right text-xs tabular-nums text-(--ui-text-muted)">
 						{{ row.dvPct !== null ? `${row.dvPct}%` : '' }}
@@ -81,7 +83,7 @@
 
 		<p class="mt-3 text-[11px] leading-snug text-(--ui-text-dimmed)">
 			* %DV: phần trăm nhu cầu một ngày theo khẩu phần tham chiếu 2.000 kcal (FDA). "—" = bảng nguồn không có số liệu, không phải 0.
-			Glucid không gồm chất xơ.
+			<template v-if="missingSet.size > 0">"≥" = có nguyên liệu thiếu số liệu chất đó, giá trị thật có thể cao hơn. </template>Glucid không gồm chất xơ.
 		</p>
 	</div>
 </template>

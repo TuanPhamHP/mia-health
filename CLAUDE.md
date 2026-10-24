@@ -6,7 +6,7 @@
 
 ## 1. Bối cảnh dự án
 
-**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần. Kèm **module dinh dưỡng** (tab "Ăn uống", làm từng phần): ① kho thực phẩm có đủ nutrition facts — ĐÃ CÓ; ② món ăn = công thức từ thực phẩm; ③ thực đơn + nhật ký ăn (khối lượng, kcal, các chất); ④ BMI, TDEE, gợi ý món.
+**mia-health** là ứng dụng web cá nhân để **lên giáo án và thực hiện bài tập** (Kegel, thể dục dụng cụ, sức mạnh, giãn cơ, hít thở…): màn hình tập có hẹn giờ nhịp siết/thả, đếm set, âm báo + giọng đọc tiếng Việt; ghi lịch sử, streak, thống kê theo tuần. Kèm **module dinh dưỡng** (tab "Ăn uống", làm từng phần): ① kho thực phẩm có đủ nutrition facts — ĐÃ CÓ; ② món ăn = công thức từ thực phẩm — ĐÃ CÓ; ③ thực đơn + nhật ký ăn (khối lượng, kcal, các chất); ④ BMI, TDEE, gợi ý món.
 
 - Tách ra từ **mia-finance** (cùng stack, cùng kiến trúc) — app riêng, D1 riêng, deploy riêng. Lý do tách thay vì gộp: dữ liệu tài chính cách ly hoàn toàn, không phải tái cấu trúc 480 file route gốc của finance, mỗi app một icon PWA. Khi có app thứ 3 mới cân nhắc gom phần hạ tầng chung (auth, layout, CSS kính, `useDB`) thành Nuxt Layer.
 - Quy mô: **solo / single-user**, dữ liệu nhỏ.
@@ -24,6 +24,7 @@ Domain model:
 - `workout_sessions` + `session_entries` — buổi tập đã thực hiện (snapshot tên/nhóm bài).
 - `stats` — streak, tuần, heatmap, theo nhóm (không có bảng riêng, aggregate từ sessions).
 - `food_categories` + `foods` + `food_portions` — kho thực phẩm: cây nhóm 2 cấp (Thịt → Gà), thực phẩm với 29 chất trên 100 g phần ăn được, khẩu phần quen dùng ("1 bát con" = 150 g).
+- `dishes` + `dish_ingredients` — món ăn = công thức: thực phẩm + gam phần ăn được cho cả công thức, nấu cho `servings` phần. Dinh dưỡng không lưu, luôn tính từ thực phẩm.
 
 ## 2. Tech stack (ĐÃ KHOÁ — không tự ý đổi)
 
@@ -82,7 +83,7 @@ app/                        # UI (pages, components, composables)
 
 **Không bao giờ** sửa tay file SQL đã generate. **Không** xoá lịch sử migration.
 **Thêm cột FK vào bảng đã có** → `drizzle-kit generate --custom` và viết tay `ALTER TABLE … REFERENCES … ON DELETE …` (drizzle-kit làm rơi mệnh đề `ON DELETE` — bài học từ mia-finance).
-**Migration dữ liệu kho thực phẩm** (`0005_seed_foods.sql`) do `node scripts/foods/build-foods.mjs <file>` SINH từ nguồn gốc (cần `pdftotext`, `unzip`; nguồn tải vào `.cache/foods/`). Sửa dữ liệu ở `scripts/foods/curation.mjs`, rồi sinh vào một migration `--custom` MỚI — không sinh đè migration đã apply. `server/database/__tests__/migrations.test.ts` chạy mọi migration vào `node:sqlite` và soát dữ liệu (Atwater, trùng tên, cột khớp `NUTRIENTS`).
+**Migration dữ liệu kho thực phẩm / món mẫu** (`0005_seed_foods.sql`, `0007_seed_dishes.sql`) do `node scripts/foods/build-foods.mjs <file>` / `build-dishes.mjs <file>` SINH (cần `pdftotext`, `unzip`; nguồn tải vào `.cache/foods/`). Sửa dữ liệu ở `scripts/foods/curation.mjs` / `dishes.mjs`, rồi sinh vào một migration `--custom` MỚI — không sinh đè migration đã apply. `server/database/__tests__/migrations.test.ts` chạy mọi migration vào `node:sqlite` và soát dữ liệu (Atwater, trùng tên, cột khớp `NUTRIENTS`).
 
 ## 5. Pattern D1 bắt buộc
 
@@ -175,6 +176,10 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 - **Số liệu dinh dưỡng là REAL, NULL = không có số liệu (khác 0).** Giá trị đo có sai số phân tích sẵn, không phải dữ liệu cần chính xác như thời lượng. NULL hiện "—", không cộng thành 0. Chỉ `energyKcal` bắt buộc.
 - **Glucid (`carbG`) KHÔNG gồm xơ** (chuẩn Codex, như bảng VN); số USDA "by difference" trừ xơ khi nhập. Vitamin A = RAE (bảng VN: retinol + β-caroten / 12). %DV theo FDA 2.000 kcal chỉ để hiện nhãn — mục tiêu riêng theo TDEE làm ở phần ④.
 - **Kho thực phẩm nạp bằng migration dữ liệu, KHÔNG qua `POST /api/presets/seed`**: ~600 dòng vượt trần 50 query/request; migration chạy cùng `db:migrate` nên DB nào cũng có sẵn.
+- **Món ăn = công thức, dinh dưỡng KHÔNG lưu, luôn tính từ thực phẩm** (`sumNutrients` / `multiplyNutrients`, có vitest): sửa thực phẩm là mọi món dùng nó đổi theo (như bài kết hợp lấy bài con live). Nguyên liệu = gam phần ăn được cho cả công thức; nấu hao nước nhưng chất gần như giữ nguyên ⇒ tổng = cộng nguyên liệu, bỏ qua hao hụt vitamin; dầu rán = lượng ngấm. Nguyên liệu thiếu số liệu một chất ⇒ cộng phần biết được + `missing` ⇒ UI hiện "≥" — KHÔNG coi null là 0, kể cả với hành lá vài gam: cùng luật đó sẽ biến nước mắm thiếu số natri thành 0 natri.
+- **Món mẫu: công thức ƯỚC LƯỢNG, kcal đối chiếu nguồn công bố** (Viện Dinh dưỡng qua báo chí, bảng Nutrihome; `build-dishes.mjs` cảnh báo lệch > 30%). Không có nguồn công bố công thức chuẩn — ghi rõ "ước lượng" ở UI. Migration trỏ thực phẩm qua `(source, source_code)`, bền với đổi tên.
+- **Xoá thực phẩm đang là nguyên liệu ⇒ 409** (FK `dish_ingredients.food_id` RESTRICT là lưới cuối); thực phẩm lưu trữ sau khi đã vào món vẫn giữ được khi sửa món, chỉ chặn thêm mới.
+- **Tab "Ăn uống" = Món ăn | Thực phẩm** (`MealsTabs`), mở vào Món ăn.
 - **Nhóm thực phẩm 2 cấp, theo con vật / loại** (Thịt → Gà gồm cả ức, đùi, cánh, gan, mề…) — nhóm gốc khớp 14 nhóm của bảng VN. Xoá nhóm còn loại con / thực phẩm ⇒ 409 (FK RESTRICT là lưới cuối).
 - **Tab dưới: Hôm nay · Kế hoạch (Chương trình | Giáo án | Bài tập) · [Tập] · Ăn uống · Lịch sử** — thư viện bài tập vào trong Kế hoạch để nhường chỗ cho Ăn uống.
 - **PWA — ba điều kiện để "Thêm vào màn hình chính" chạy đúng** (đã kiểm bằng build production + `wrangler pages dev` + Chrome: installability không lỗi, SW kiểm soát trang, offline mở được app):
@@ -208,5 +213,6 @@ Giống hệt mia-finance: `nuxt-auth-utils`, cookie session 30 ngày rolling.
 | Stats (streak, tuần, heatmap) | `docs/bridges/stats.md` |
 | Programs (chương trình, giai đoạn, lịch) + Plan (lịch ngày, bỏ qua / đổi / thêm buổi) | `docs/bridges/programs.md` |
 | Foods (kho thực phẩm, nhóm, khẩu phần, nguồn số liệu) | `docs/bridges/foods.md` |
+| Dishes (món ăn = công thức, dinh dưỡng tính từ nguyên liệu, món mẫu) | `docs/bridges/dishes.md` |
 
 **Quy trình bridge-doc cuốn chiếu** (giữ nguyên từ mia-finance): xong backend một module ⇒ viết/cập nhật bridge-doc NGAY trong cùng đợt, shape lấy từ response thật (`yarn dev` + curl), không bịa từ đọc code.

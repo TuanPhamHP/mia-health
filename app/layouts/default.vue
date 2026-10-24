@@ -30,7 +30,7 @@
 		{ label: 'Kế hoạch', icon: 'i-heroicons-clipboard-document-list', to: '/programs', also: ['/routines', '/exercises'] },
 	];
 	const rightTabs = [
-		{ label: 'Ăn uống', icon: 'i-heroicons-cake', to: '/foods' },
+		{ label: 'Ăn uống', icon: 'i-heroicons-cake', to: '/dishes', also: ['/foods'] },
 		{ label: 'Lịch sử', icon: 'i-heroicons-calendar-days', to: '/history' },
 	];
 
@@ -57,6 +57,7 @@
 		if (/^\/routines\/[^/]+$/.test(route.path)) return '/routines';
 		if (/^\/exercises\/[^/]+$/.test(route.path)) return '/exercises';
 		if (/^\/foods\/[^/]+$/.test(route.path)) return '/foods';
+		if (/^\/dishes\/[^/]+$/.test(route.path)) return '/dishes';
 		return null;
 	});
 

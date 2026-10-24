@@ -7,3 +7,4 @@ export * from './media';
 export * from './programs';
 export * from './plan';
 export * from './foods';
+export * from './dishes';

@@ -85,6 +85,8 @@
 
 <template>
 	<div class="py-4 space-y-3">
+		<MealsTabs />
+
 		<UInput
 			v-model="search"
 			icon="i-heroicons-magnifying-glass"

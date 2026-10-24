@@ -58,4 +58,5 @@ GET    /api/stats/overview?today=
 GET    /api/food-categories      POST /api/food-categories  PATCH|DELETE /api/food-categories/:id
 GET    /api/foods?categoryId=&q= POST /api/foods            GET|PATCH|DELETE /api/foods/:id
 POST   /api/foods/:id/portions   PATCH|DELETE /api/foods/:id/portions/:portionId
+GET    /api/dishes?category=&q=  POST /api/dishes           GET|PATCH|DELETE /api/dishes/:id
 ```

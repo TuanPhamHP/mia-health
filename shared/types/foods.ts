@@ -79,4 +79,6 @@ export interface FoodPortionDTO {
 export interface FoodDetailDTO extends FoodDTO {
 	portions: FoodPortionDTO[];
 	category: { id: number; name: string; parent: { id: number; name: string } | null };
+	/** Món đang dùng thực phẩm này làm nguyên liệu (theo tên). */
+	dishes: { id: number; name: string }[];
 }

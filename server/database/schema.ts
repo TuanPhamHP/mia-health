@@ -479,3 +479,63 @@ export const foodPortions = sqliteTable(
 
 export type FoodPortion = typeof foodPortions.$inferSelect;
 export type NewFoodPortion = typeof foodPortions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Món ăn = công thức từ thực phẩm trong kho. Dinh dưỡng KHÔNG lưu — luôn tính từ nguyên liệu
+// (sửa thực phẩm là món đổi theo, như bài kết hợp lấy bài con live).
+// ---------------------------------------------------------------------------
+
+export const DISH_CATEGORIES = ['main', 'veg', 'soup', 'noodle', 'rice', 'snack', 'drink', 'other'] as const;
+export type DishCategory = (typeof DISH_CATEGORIES)[number];
+
+//   preset — món mẫu nạp bằng migration (công thức ước lượng phổ biến)
+//   user   — người dùng tự soạn
+export const DISH_SOURCES = ['preset', 'user'] as const;
+export type DishSource = (typeof DISH_SOURCES)[number];
+
+export const dishes = sqliteTable(
+	'dishes',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		name: text('name').notNull(),
+		category: text('category', { enum: DISH_CATEGORIES }).notNull(),
+		description: text('description'), // cách nấu / ghi chú
+		// Công thức nấu cho bao nhiêu phần — dinh dưỡng 1 phần = tổng nguyên liệu / servings.
+		servings: integer('servings').notNull().default(1),
+		// Khối lượng món sau khi nấu (cân cả nồi) — có thì tính được dinh dưỡng theo gam món chín.
+		cookedWeightG: real('cooked_weight_g'),
+		source: text('source', { enum: DISH_SOURCES }).notNull().default('user'),
+		isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+	},
+	(t) => [uniqueIndex('dishes_name_unique').on(t.name), index('dishes_category_idx').on(t.category)],
+);
+
+export type Dish = typeof dishes.$inferSelect;
+export type NewDish = typeof dishes.$inferInsert;
+
+export const dishIngredients = sqliteTable(
+	'dish_ingredients',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		dishId: integer('dish_id')
+			.notNull()
+			.references(() => dishes.id, { onDelete: 'cascade' }),
+		// RESTRICT: service chặn xoá thực phẩm đang là nguyên liệu (409, gợi ý lưu trữ).
+		foodId: integer('food_id')
+			.notNull()
+			.references(() => foods.id, { onDelete: 'restrict' }),
+		grams: real('grams').notNull(), // khối lượng PHẦN ĂN ĐƯỢC của nguyên liệu cho cả công thức
+		position: integer('position').notNull().default(0),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(t) => [index('dish_ingredients_dish_idx').on(t.dishId), index('dish_ingredients_food_idx').on(t.foodId)],
+);
+
+export type DishIngredient = typeof dishIngredients.$inferSelect;
+export type NewDishIngredient = typeof dishIngredients.$inferInsert;

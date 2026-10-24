@@ -62,7 +62,7 @@
 				</UFormField>
 			</div>
 
-			<UFormField label="Lời dặn" hint="Hiện ở màn Hôm nay trong suốt giai đoạn">
+			<UFormField label="Lời dặn" description="Hiện ở màn Hôm nay trong suốt giai đoạn">
 				<UTextarea v-model="note" :rows="2" autoresize class="w-full" placeholder="VD: Tăng tạ 5–10% so với giai đoạn trước" />
 			</UFormField>
 

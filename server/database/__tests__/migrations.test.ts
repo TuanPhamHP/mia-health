@@ -78,3 +78,36 @@ describe('kho thực phẩm ban đầu', () => {
 		}
 	});
 });
+
+describe('món ăn mẫu', () => {
+	const dishes = all('SELECT * FROM dishes');
+
+	it('đủ món, tên không trùng', () => {
+		expect(dishes.length).toBeGreaterThan(40);
+		const keys = dishes.map((d) => String(d.name).toLocaleLowerCase('vi'));
+		expect(new Set(keys).size).toBe(keys.length);
+	});
+
+	// Nguyên liệu nối với thực phẩm qua (source, source_code) — trỏ sai mã thì JOIN rơi mất dòng
+	// trong im lặng; đối chiếu với công thức gốc để bắt.
+	it('mọi nguyên liệu trong công thức đều nối được với thực phẩm', async () => {
+		const { DISHES } = await import('../../../scripts/foods/dishes.mjs');
+		const counts = new Map(all('SELECT dish_id, COUNT(*) AS n FROM dish_ingredients GROUP BY dish_id').map((r) => [r.dish_id, r.n]));
+		for (const d of dishes) {
+			const recipe = (DISHES as { name: string; ingredients: unknown[] }[]).find((r) => r.name === d.name);
+			expect(recipe, String(d.name)).toBeDefined();
+			expect(counts.get(d.id), String(d.name)).toBe(recipe!.ingredients.length);
+		}
+	});
+
+	it('một phần có năng lượng hợp lý (10–1.200 kcal)', () => {
+		const perServing = all(
+			`SELECT d.name, SUM(f.energy_kcal * i.grams / 100.0) / d.servings AS kcal
+			 FROM dishes d JOIN dish_ingredients i ON i.dish_id = d.id JOIN foods f ON f.id = i.food_id GROUP BY d.id`,
+		);
+		for (const d of perServing) {
+			expect(Number(d.kcal), String(d.name)).toBeGreaterThan(10);
+			expect(Number(d.kcal), String(d.name)).toBeLessThan(1200);
+		}
+	});
+});
